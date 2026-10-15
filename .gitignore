@@ -1,0 +1,7 @@
+/supabase/
+/backend/bin/
+
+.env
+.env.*
+!.env.example
+*.log
