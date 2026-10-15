@@ -1,0 +1,41 @@
+.login-button {
+  border: 0;
+  padding: 12px 4px;
+  background: transparent;
+  color: var(--charcoal);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.login-button:hover {
+  color: #047857;
+}
+.login-dialog {
+  width: min(430px, calc(100% - 36px));
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--charcoal);
+  background: var(--background);
+}
+.login-dialog::backdrop {
+  background: rgb(31 41 55 / 40%);
+}
+.login-dialog h2 {
+  font-size: 26px;
+}
+.login-dialog p {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted);
+  margin: 18px 0 24px;
+}
+.login-dialog .button {
+  border: 0;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .login-button {
+    font-size: 12px;
+  }
+}
