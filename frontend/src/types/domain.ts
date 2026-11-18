@@ -1,3 +1,5 @@
+import type { ModerationActionRow } from './database';
+
 export type Role = 'developer' | 'company' | 'moderator';
 export type WebsiteStatus = 'not_found' | 'found' | 'needs_review';
 export interface Company {
@@ -6,10 +8,12 @@ export interface Company {
   initials: string;
   city: string;
   category: string;
+  categoryId?: string | null;
+  sourceUrl?: string | null;
+  visibility?: string;
   address: string;
-  description: string;
   websiteStatus: WebsiteStatus;
-  checkedAt: string;
+  checkedAt: string | null;
   website?: string;
   phone?: string;
   email?: string;
@@ -21,16 +25,17 @@ export interface Order {
   city: string;
   title: string;
   description: string;
-  budgetMin: number;
-  budgetMax: number;
-  deadline: string;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  deadline: string | null;
   status: 'open' | 'in_progress' | 'completed' | 'draft';
   applicationsCount: number;
   publishedAt: string;
-  contractorId?: string;
+  selectedApplicationId?: string | null;
+  visibility?: boolean;
 }
 export interface Profile {
-  /** Local demo avatar. The supplied profiles table has no avatar column. */
+  /** Stored URL; data URLs are allowed only in the local demo upload flow. */
   avatarUrl?: string;
   id: string;
   name: string;
@@ -53,8 +58,8 @@ export interface Application {
   orderId: string;
   name: string;
   profileId: string;
-  price: number;
-  deadline: string;
+  price: number | null;
+  deadline: string | null;
   letter: string;
   status: 'pending' | 'selected' | 'rejected' | 'withdrawn' | 'completed';
 }
@@ -63,6 +68,7 @@ export interface Contact {
   status: string;
   note: string;
   date: string;
+  contactedAt?: string | null;
 }
 export interface Member {
   id: string;
@@ -76,6 +82,9 @@ export interface Correction {
   message: string;
   status: 'pending' | 'approved' | 'rejected';
   reason?: string;
+  requestedBy?: string;
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
 }
 export interface AppState {
   profile: Profile;
@@ -89,7 +98,7 @@ export interface AppState {
   members: Member[];
   corrections: Correction[];
   hiddenCompanies: string[];
-  history: string[];
+  history: ModerationActionRow[];
 }
 export interface Paged<T> {
   items: T[];

@@ -1,4 +1,5 @@
 'use client';
+import { deadlineLabel } from '@/lib/format';
 
 import Link from 'next/link';
 import { useState } from 'react';
@@ -56,7 +57,7 @@ export function AccountPage({ view }: { view: View }) {
         <span className="badge align-start">{applicationLabels[a.status]}</span>
         <h2>{order?.title || 'Заказ недоступен'}</h2>
         <p className="small muted">
-          {order?.companyName} · До {dateLabel(a.deadline)}
+          {order?.companyName} · {deadlineLabel(a.deadline)}
         </p>
         <p>Ваше предложение: {money(a.price)}</p>
         <p className="preserve-lines">{a.letter}</p>

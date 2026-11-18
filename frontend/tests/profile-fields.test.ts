@@ -20,6 +20,7 @@ test('profile mutation only contains editable database columns', () => {
   assert.deepEqual(profileFields(form), {
     name: 'Мария',
     bio: null,
+    avatar_url: null,
     skills: 'React, TypeScript',
     github_url: 'https://github.com/example',
   });

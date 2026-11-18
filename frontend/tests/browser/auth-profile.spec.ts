@@ -113,7 +113,7 @@ test('broken avatar falls back to initials and invalid upload is rejected', asyn
 test('company fields and existing portfolio items can be edited', async ({ page }) => {
   await page.goto('/workspace/profile');
   await page.getByRole('button', { name: 'Открыть демо компании' }).click();
-  await page.getByLabel('Сфера деятельности').fill('Образование');
+  await page.getByLabel('Сфера деятельности').selectOption({ label: 'Образование' });
   await page.getByLabel('Адрес компании').fill('ул. Новая, 25');
   await page.getByLabel('Сайт компании').fill('https://example.com');
   await page.getByRole('button', { name: 'Сохранить изменения' }).click();

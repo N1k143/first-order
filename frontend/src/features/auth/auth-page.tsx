@@ -64,11 +64,13 @@ export function AuthPage({ view, entryRole }: { view: View; entryRole?: AuthRole
                   initials: String(values.company).trim().slice(0, 2).toUpperCase(),
                   city: String(values.city).trim(),
                   address: '',
-                  description: '',
                   email: String(values.email),
                   phone: '',
                   website: '',
-                  checkedAt: new Date().toISOString().slice(0, 10),
+                  checkedAt: null,
+                  categoryId: null,
+                  category: 'Без категории',
+                  sourceUrl: null,
                   websiteStatus: 'needs_review' as const,
                 }
               : undefined;

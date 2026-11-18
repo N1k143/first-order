@@ -145,10 +145,4 @@ export function InfoRow({
     </div>
   );
 }
-export const money = (value: number) => new Intl.NumberFormat('ru-RU').format(value) + ' ₸';
-export const dateLabel = (value: string) =>
-  new Date(value + 'T12:00:00Z').toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
+export { money, budgetLabel, dateLabel, deadlineLabel } from '@/lib/format';

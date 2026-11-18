@@ -81,6 +81,7 @@ export function ProfileEditor() {
         setMessage('Профиль сохранён в этом браузере.');
       }}
     >
+      <input type="hidden" name="avatar_url" value={avatar} />
       <h3>Фото профиля</h3>
       <div className="button-row">
         <Avatar name={profile.name} src={avatar} size={80} />

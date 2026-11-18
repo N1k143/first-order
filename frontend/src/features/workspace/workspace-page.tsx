@@ -1,10 +1,12 @@
 'use client';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 
 import Link from 'next/link';
+import { CompanyEditor } from './company-editor';
 import { useState } from 'react';
 import { AccountShell } from '@/components/layout/account-shell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { EmptyState, Field, Textarea, Notice, money, dateLabel } from '@/components/ui/primitives';
+import { EmptyState, Notice, money } from '@/components/ui/primitives';
 import { AccountAccess } from '@/features/account/account-access';
 import { useAppState, updateDemo } from '@/lib/state/store';
 import { orderLabels, selectContractor } from '@/lib/state/order-actions';
@@ -55,7 +57,7 @@ export function WorkspacePage({
               <span className="badge">{orderLabels[o.status]}</span>
             </div>
             <p className="small muted">
-              {money(o.budgetMin)} – {money(o.budgetMax)} · До {dateLabel(o.deadline)}
+              {budgetLabel(o.budgetMin, o.budgetMax)} · {deadlineLabel(o.deadline)}
             </p>
             <Link
               className="text-link"
@@ -136,8 +138,7 @@ export function WorkspacePage({
                 <h2>{order.title}</h2>
                 <p className="preserve-lines">{order.description}</p>
                 <p>
-                  {money(order.budgetMin)} – {money(order.budgetMax)} · До{' '}
-                  {dateLabel(order.deadline)}
+                  {budgetLabel(order.budgetMin, order.budgetMax)} · {deadlineLabel(order.deadline)}
                 </p>
                 <div className="button-row">
                   <Link className="button secondary" href={`/orders/${order.id}`}>
@@ -155,13 +156,13 @@ export function WorkspacePage({
                   )}
                 </div>
               </article>
-              {order.contractorId && (
+              {order.selectedApplicationId && (
                 <article className="card stack">
                   <h3>Исполнитель</h3>
                   <p>
                     {
                       state.applications.find(
-                        (a) => a.orderId === order.id && a.profileId === order.contractorId,
+                        (a) => a.orderId === order.id && a.id === order.selectedApplicationId,
                       )?.name
                     }
                   </p>
@@ -198,7 +199,7 @@ export function WorkspacePage({
                 </div>
                 <p className="small muted">{orders.find((o) => o.id === a.orderId)?.title}</p>
                 <p>
-                  {money(a.price)} · Готово к {dateLabel(a.deadline)}
+                  {money(a.price)} · {deadlineLabel(a.deadline)}
                 </p>
                 <p className="preserve-lines">{a.letter}</p>
                 {a.status === 'pending' &&
@@ -217,93 +218,7 @@ export function WorkspacePage({
               label="Мои заказы"
             />
           ))}
-        {view === 'profile' && (
-          <form
-            className="card stack"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              updateDemo((s) => ({
-                ...s,
-                company: {
-                  ...s.company,
-                  name: String(f.get('name')).trim(),
-                  city: String(f.get('city')).trim(),
-                  description: String(f.get('description')).trim(),
-                  email: String(f.get('email')).trim(),
-                  phone: String(f.get('phone')).trim(),
-                  address: String(f.get('address')).trim(),
-                  category: String(f.get('category')).trim(),
-                  website: String(f.get('website')).trim(),
-                  initials: String(f.get('name'))
-                    .trim()
-                    .split(/\s+/)
-                    .map((part) => part[0])
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase(),
-                },
-                orders: s.orders.map((o) =>
-                  o.companyId === s.company.id
-                    ? {
-                        ...o,
-                        companyName: String(f.get('name')).trim(),
-                        city: String(f.get('city')).trim(),
-                      }
-                    : o,
-                ),
-              }));
-              setMessage('Данные компании сохранены в этом браузере.');
-            }}
-          >
-            <h3>О компании</h3>
-            <Field
-              label="Название компании"
-              name="name"
-              defaultValue={state.company.name}
-              required
-              maxLength={120}
-            />
-            <Field label="Город" name="city" defaultValue={state.company.city} required />
-            <Field
-              label="Сфера деятельности"
-              name="category"
-              defaultValue={state.company.category}
-              required
-              maxLength={120}
-            />
-            <Field
-              label="Адрес компании"
-              name="address"
-              defaultValue={state.company.address}
-              maxLength={300}
-            />
-            <Field
-              label="Сайт компании"
-              name="website"
-              type="url"
-              pattern="https?://.*"
-              defaultValue={state.company.website}
-              placeholder="https://example.com"
-            />
-            <Textarea
-              label="Описание"
-              name="description"
-              defaultValue={state.company.description}
-              required
-            />
-            <div className="form-grid">
-              <Field
-                label="Email для связи"
-                name="email"
-                type="email"
-                defaultValue={state.company.email}
-              />
-              <Field label="Телефон" name="phone" type="tel" defaultValue={state.company.phone} />
-            </div>
-            <button className="button align-start">Сохранить изменения</button>
-          </form>
-        )}
+        {view === 'profile' && <CompanyEditor />}
         {view === 'members' && (
           <>
             <div className="card stack">

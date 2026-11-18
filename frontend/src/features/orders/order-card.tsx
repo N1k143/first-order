@@ -1,8 +1,8 @@
 import Link from 'next/link';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 import type { Order } from '@/types/domain';
 import styles from './order-card.module.css';
 export function OrderCard({ order }: { order: Order }) {
-  const money = new Intl.NumberFormat('ru-RU');
   return (
     <article className="card stack">
       <div className={styles.heading}>
@@ -17,16 +17,9 @@ export function OrderCard({ order }: { order: Order }) {
               : 'В работе'}
         </span>
       </div>
-      <p className={styles.budget}>
-        {money.format(order.budgetMin)} – {money.format(order.budgetMax)} ₸
-      </p>
+      <p className={styles.budget}>{budgetLabel(order.budgetMin, order.budgetMax)}</p>
       <p className="small muted">
-        {order.companyName} · {order.city} · До{' '}
-        {new Date(`${order.deadline}T12:00:00Z`).toLocaleDateString('ru-RU', {
-          day: 'numeric',
-          month: 'long',
-          timeZone: 'UTC',
-        })}
+        {order.companyName} · {order.city} · {deadlineLabel(order.deadline)}
       </p>
       <p className="muted">{order.description}</p>
       <div className={styles.bottom}>

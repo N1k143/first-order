@@ -18,7 +18,7 @@ test('order validation rejects inverted budgets and dates in the past', () => {
 test('choosing a contractor changes the order and rejects competing pending offers', () => {
   const result = selectContractor(structuredClone(initialState), 'coffee-website', 'anna-coffee');
   assert.equal(result.orders[0].status, 'in_progress');
-  assert.equal(result.orders[0].contractorId, 'anna');
+  assert.equal(result.orders[0].selectedApplicationId, 'anna-coffee');
   assert.equal(result.applications.find((a) => a.id === 'my-coffee')?.status, 'rejected');
   assert.throws(() => selectContractor(result, 'coffee-website', 'my-coffee'));
   assert.equal(initialState.orders[0].status, 'open');

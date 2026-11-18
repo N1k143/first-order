@@ -5,6 +5,7 @@ import { AccountShell } from '@/components/layout/account-shell';
 import { EmptyState, Textarea, Notice } from '@/components/ui/primitives';
 import { AccountAccess } from '@/features/account/account-access';
 import { useAppState, updateDemo } from '@/lib/state/store';
+import { dateLabel } from '@/lib/format';
 import { companies } from '@/data/demo';
 
 export function ModerationPage({ view = 'queue' }: { view?: 'queue' | 'import' | 'history' }) {
@@ -57,11 +58,25 @@ export function ModerationPage({ view = 'queue' }: { view?: 'queue' | 'import' |
                         ...s,
                         corrections: s.corrections.map((item) =>
                           item.id === c.id
-                            ? { ...item, status: approve ? 'approved' : 'rejected', reason }
+                            ? {
+                                ...item,
+                                status: approve ? 'approved' : 'rejected',
+                                reason,
+                                resolvedBy: s.profile.id,
+                                resolvedAt: new Date().toISOString(),
+                              }
                             : item,
                         ),
                         history: [
-                          `${new Date().toLocaleString('ru-RU')} · ${companies.find((item) => item.id === c.companyId)?.name || c.companyId} · ${approve ? 'Обращение подтверждено' : 'Обращение отклонено'} · ${reason}`,
+                          {
+                            id: crypto.randomUUID(),
+                            moderator_id: s.profile.id,
+                            company_id: c.companyId,
+                            order_id: null,
+                            action: approve ? 'correction_approved' : 'correction_rejected',
+                            reason,
+                            created_at: new Date().toISOString(),
+                          },
                           ...s.history,
                         ],
                       }));
@@ -103,7 +118,21 @@ export function ModerationPage({ view = 'queue' }: { view?: 'queue' | 'import' |
               (state.history.length ? (
                 state.history.map((item, i) => (
                   <article className="card" key={i}>
-                    <p>{item}</p>
+                    <p>
+                      {dateLabel(item.created_at)} ·{' '}
+                      {companies.find((c) => c.id === item.company_id)?.name ||
+                        item.company_id ||
+                        'Общее действие'}{' '}
+                      ·{' '}
+                      {item.action === 'correction_approved'
+                        ? 'Обращение подтверждено'
+                        : item.action === 'correction_rejected'
+                          ? 'Обращение отклонено'
+                          : item.action === 'legacy_record'
+                            ? 'Ранее сохранённая запись'
+                            : item.action}{' '}
+                      · {item.reason}
+                    </p>
                   </article>
                 ))
               ) : (

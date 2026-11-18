@@ -1,20 +1,20 @@
 'use client';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useRef } from 'react';
-import { companies } from '@/data/demo';
+import { companies, categories } from '@/data/demo';
 import { useResource } from '@/lib/api/resources';
 import { useAppState } from '@/lib/state/store';
 import { CompanyCard, statusLabels } from './company-card';
 import { filterCompanies } from './filter';
 import { EmptyState, PageHeading, ResourceState } from '@/components/ui/primitives';
 import styles from './catalog.module.css';
-const categories = ['Кафе и рестораны', 'Красота и здоровье', 'Образование', 'Медицина', 'Услуги'];
 export function CatalogPage() {
   const params = useSearchParams(),
     router = useRouter(),
     pathname = usePathname(),
     dialog = useRef<HTMLDialogElement>(null);
   const state = useAppState();
+  const directory = useResource('/categories', categories);
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1),
     size = 3;
   const filtered = filterCompanies(
@@ -39,13 +39,14 @@ export function CatalogPage() {
     <div className={`card ${styles.filters}`}>
       <h3>Фильтры</h3>
       <p className="small">Сфера бизнеса</p>
-      {['Все сферы', ...categories].map((c, i) => (
+      {!directory.data && <ResourceState error={directory.error} reload={directory.reload} />}
+      {[{ id: '', name: 'Все сферы' }, ...(directory.data || [])].map((c) => (
         <button
-          key={c}
-          aria-pressed={(params.get('category') || '') === (i ? c : '')}
-          onClick={() => change({ category: i ? c : '' })}
+          key={c.id}
+          aria-pressed={(params.get('category_id') || '') === c.id}
+          onClick={() => change({ category_id: c.id, category: '' })}
         >
-          {c}
+          {c.name}
         </button>
       ))}
       <hr />

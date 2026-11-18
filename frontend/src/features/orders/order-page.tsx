@@ -1,9 +1,11 @@
 'use client';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 
 import Link from 'next/link';
 import { useState } from 'react';
 import { useAppState, updateDemo, DEMO } from '@/lib/state/store';
 import { mutate, useResource } from '@/lib/api/resources';
+import { applicationFields } from '@/lib/api/form-fields';
 import { orderLabels } from '@/lib/state/order-actions';
 import { AccountAccess } from '@/features/account/account-access';
 import {
@@ -13,7 +15,6 @@ import {
   Textarea,
   Field,
   Notice,
-  money,
   dateLabel,
 } from '@/components/ui/primitives';
 
@@ -21,7 +22,7 @@ export function OrderPage({ id, apply = false }: { id: string; apply?: boolean }
   const state = useAppState();
   const resource = useResource(
     `/orders/${encodeURIComponent(id)}`,
-    state.orders.find((o) => o.id === id && o.status !== 'draft'),
+    state.orders.find((o) => o.id === id && o.status !== 'draft' && o.visibility !== false),
   );
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
@@ -99,28 +100,34 @@ export function OrderPage({ id, apply = false }: { id: string; apply?: boolean }
                     return;
                   }
                   const f = new FormData(e.currentTarget);
+                  let fields;
+                  try {
+                    fields = applicationFields(f);
+                  } catch (error) {
+                    setError(error instanceof Error ? error.message : 'Проверьте поля отклика.');
+                    return;
+                  }
                   const application = {
                     id: crypto.randomUUID(),
                     orderId: id,
                     name: state.profile.name,
                     profileId: state.profile.id,
-                    price: Number(f.get('price')),
-                    deadline: String(f.get('deadline')),
-                    letter: String(f.get('letter')).trim(),
+                    price: fields.proposed_price,
+                    deadline: fields.proposed_deadline,
+                    letter: fields.message,
                     status: 'pending' as const,
                   };
                   if (
                     application.letter.length < 20 ||
-                    !Number.isFinite(application.price) ||
-                    application.price <= 0 ||
-                    application.deadline < new Date().toISOString().slice(0, 10)
+                    (application.deadline !== null &&
+                      application.deadline < new Date().toISOString().slice(0, 10))
                   ) {
                     setError('Проверьте письмо, стоимость и срок.');
                     return;
                   }
                   setPending(true);
                   try {
-                    await mutate(`/orders/${id}/applications`, 'POST', application, () =>
+                    await mutate(`/orders/${id}/applications`, 'POST', fields, () =>
                       updateDemo((s) => ({
                         ...s,
                         applications: [...s.applications, application],
@@ -151,9 +158,9 @@ export function OrderPage({ id, apply = false }: { id: string; apply?: boolean }
                     label="Стоимость, ₸"
                     name="price"
                     type="number"
-                    min={1}
+                    min={0}
                     max={1000000000}
-                    required
+                    step="any"
                     placeholder="150 000"
                   />
                   <Field
@@ -161,7 +168,6 @@ export function OrderPage({ id, apply = false }: { id: string; apply?: boolean }
                     name="deadline"
                     type="date"
                     min={new Date().toISOString().slice(0, 10)}
-                    required
                   />
                 </div>
                 <p className="small muted">В отклике будет ссылка на ваш профиль и портфолио.</p>
@@ -230,12 +236,10 @@ export function OrderPage({ id, apply = false }: { id: string; apply?: boolean }
           </article>
         </div>
         <aside className="card stack">
-          <h2>
-            {money(order.budgetMin)} – {money(order.budgetMax)}
-          </h2>
+          <h2>{budgetLabel(order.budgetMin, order.budgetMax)}</h2>
           <p className="small muted">Бюджет проекта</p>
           <hr />
-          <p>Срок: до {dateLabel(order.deadline)}</p>
+          <p>{deadlineLabel(order.deadline)}</p>
           <p className="small muted">
             {order.applicationsCount} откликов · опубликован {dateLabel(order.publishedAt)}
           </p>

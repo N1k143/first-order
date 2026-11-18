@@ -203,3 +203,67 @@ test('company notes and favorites persist; correction reaches moderation', async
   await page.goto('/moderation/history');
   await expect(page.getByText(/Dental Plus.*Обращение подтверждено/)).toBeVisible();
 });
+
+test('order and application accept omitted budgets and deadlines', async ({ page }) => {
+  await useCompany(page);
+  await page.getByLabel('Название заказа').fill('Проект без фиксированного бюджета');
+  await page
+    .getByLabel('Описание задачи')
+    .fill('Обсудить объём работ и сроки после знакомства с исполнителем.');
+  await page.getByRole('button', { name: 'Предпросмотр', exact: true }).click();
+  await expect(page.getByText('Бюджет по договорённости')).toBeVisible();
+  await expect(page.getByText('Срок по договорённости')).toBeVisible();
+  await page.getByRole('button', { name: 'Опубликовать заказ' }).click();
+  await page.getByRole('link', { name: 'Открыть публичную страницу' }).click();
+  await expect(page.getByText('Бюджет по договорённости')).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('firstorder:demo:v1')!));
+  expect(saved.orders[0].budgetMin).toBeNull();
+  expect(saved.orders[0].deadline).toBeNull();
+  expect(saved.orders[0].visibility).toBe(true);
+  await page.evaluate(() => localStorage.removeItem('firstorder:demo:v1'));
+  await page.goto('/orders/interior-website/apply');
+  await page
+    .getByLabel('Сопроводительное письмо')
+    .fill('Предлагаю обсудить объём работы и затем определить стоимость и срок.');
+  await page.getByRole('button', { name: 'Отправить отклик' }).click();
+  await expect(page.getByRole('button', { name: 'Отправить отклик' })).toBeDisabled();
+  const application = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('firstorder:demo:v1')!).applications.find(
+      (item: { orderId: string }) => item.orderId === 'interior-website',
+    ),
+  );
+  expect(application.price).toBeNull();
+  expect(application.deadline).toBeNull();
+});
+
+test('contact date persists separately from the update timestamp', async ({ page }) => {
+  await page.goto('/companies/dental-plus/contacts');
+  await page.getByLabel('Дата контакта').fill('2026-10-20');
+  await page.getByLabel('Моя заметка').fill('Обсудили задачу по телефону.');
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Заметка сохранена');
+  await page.reload();
+  await expect(page.getByLabel('Дата контакта')).toHaveValue('2026-10-20');
+  const contact = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('firstorder:demo:v1')!).contacts.find(
+      (item: { companyId: string }) => item.companyId === 'dental-plus',
+    ),
+  );
+  expect(contact.contactedAt).toBe('2026-10-20T12:00:00.000Z');
+  expect(contact.date).not.toBe(contact.contactedAt);
+});
+
+test('hidden orders are absent from company cards and public order routes', async ({ page }) => {
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('firstorder:demo:v1')!);
+    state.orders.find((order: { id: string }) => order.id === 'coffee-website').visibility = false;
+    localStorage.setItem('firstorder:demo:v1', JSON.stringify(state));
+  });
+  await page.goto('/companies/arman-coffee');
+  await expect(page.getByRole('heading', { name: 'Открытый заказ' })).toHaveCount(0);
+  await page.goto('/orders/coffee-website');
+  await expect(page.getByRole('link', { name: 'Откликнуться', exact: true })).toHaveCount(0);
+  await expect(page.locator('main')).toContainText('недоступен');
+});

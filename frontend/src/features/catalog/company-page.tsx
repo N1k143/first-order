@@ -1,11 +1,14 @@
 'use client';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 import Link from 'next/link';
 import { useState } from 'react';
 import { AccountAccess } from '@/features/account/account-access';
 import { companies } from '@/data/demo';
 import { useAppState, updateDemo, DEMO } from '@/lib/state/store';
-import { useResource, mutate } from '@/lib/api/resources';
+import { contactFields } from '@/lib/api/form-fields';
+import { useResource, mutate, safeHref } from '@/lib/api/resources';
 import {
+  Field,
   PageHeading,
   InfoRow,
   Select,
@@ -33,7 +36,9 @@ export function CompanyPage({
     [pending, setPending] = useState(false);
   const c = resource.data;
   const contact = state.contacts.find((x) => x.companyId === id);
-  const order = state.orders.find((o) => o.companyId === id && o.status === 'open');
+  const order = state.orders.find(
+    (o) => o.companyId === id && o.status === 'open' && o.visibility !== false,
+  );
   async function note(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!state.signedIn) {
@@ -44,13 +49,15 @@ export function CompanyPage({
     setPending(true);
     setError('');
     try {
+      const fields = contactFields(f, contact?.contactedAt);
       const item = {
         companyId: id,
-        status: String(f.get('status')),
-        note: String(f.get('note')),
-        date: new Date().toISOString().slice(0, 10),
+        status: fields.status,
+        note: fields.notes || '',
+        contactedAt: fields.contacted_at,
+        date: new Date().toISOString(),
       };
-      await mutate(`/me/contacts/${id}`, 'PATCH', item, () =>
+      await mutate(`/me/contacts/${id}`, 'PATCH', fields, () =>
         updateDemo((s) => ({
           ...s,
           contacts: [...s.contacts.filter((x) => x.companyId !== id), item],
@@ -74,6 +81,12 @@ export function CompanyPage({
           <option key={s}>{s}</option>
         ))}
       </Select>
+      <Field
+        label="Дата контакта"
+        name="contacted_at"
+        type="date"
+        defaultValue={contact?.contactedAt?.slice(0, 10) || ''}
+      />
       <Textarea
         label={view === 'contacts' ? 'Моя заметка' : 'Заметка'}
         name="note"
@@ -114,17 +127,33 @@ export function CompanyPage({
           style={{ maxWidth: 848 }}
           onSubmit={async (e) => {
             e.preventDefault();
-            const value = String(new FormData(e.currentTarget).get('message'));
+            const value = String(new FormData(e.currentTarget).get('message')).trim();
+            if (!state.signedIn) {
+              setError('Войдите, чтобы отправить исправление.');
+              return;
+            }
             setPending(true);
             try {
-              await mutate(`/companies/${id}/corrections`, 'POST', { message: value }, () =>
-                updateDemo((s) => ({
-                  ...s,
-                  corrections: [
-                    ...s.corrections,
-                    { id: crypto.randomUUID(), companyId: id, message: value, status: 'pending' },
-                  ],
-                })),
+              await mutate(
+                `/companies/${id}/corrections`,
+                'POST',
+                { company_id: id, message: value },
+                () =>
+                  updateDemo((s) => ({
+                    ...s,
+                    corrections: [
+                      ...s.corrections,
+                      {
+                        id: crypto.randomUUID(),
+                        companyId: id,
+                        requestedBy: s.profile.id,
+                        resolvedBy: null,
+                        resolvedAt: null,
+                        message: value,
+                        status: 'pending',
+                      },
+                    ],
+                  })),
               );
               setMessage(
                 DEMO
@@ -208,30 +237,42 @@ export function CompanyPage({
             <div>
               <span className="badge amber">{statusLabels[c.websiteStatus]}</span>
             </div>
-            <h2>{id === 'arman-coffee' ? 'Кофейня в Астане' : c.name}</h2>
+            <h2>{c.name}</h2>
             <p>
-              {id === 'arman-coffee'
-                ? 'Небольшая городская кофейня с завтраками, собственной выпечкой и двумя точками. Информация в карточке собрана из открытого источника.'
-                : c.description}
+              {c.category || 'Без категории'} · {c.city}
             </p>
-            <hr />
-            <h3>Что можно предложить</h3>
-            <p>
-              Сайт с меню, адресами и часами работы. Страницу для предзаказа и контактов. Перед
-              предложением уточните потребности компании.
-            </p>
+            <p className="muted">Перед предложением уточните актуальные потребности компании.</p>
           </article>
           <article className="card stack">
             <h3>Информация о компании</h3>
             {[
               ['Город', c.city],
-              ['Адрес', c.address],
+              ['Адрес', c.address || 'Не указан'],
               ['Сфера', c.category],
-              ['Проверка сайта', dateLabel(c.checkedAt) + ' 2026'],
-              ['Источник', 'Открытый справочник'],
+              ['Проверка сайта', c.checkedAt ? dateLabel(c.checkedAt) : 'Не проводилась'],
             ].map(([label, value]) => (
               <InfoRow key={label} label={label} value={value} />
             ))}
+            {safeHref(c.website || '') && (
+              <a
+                className="text-link"
+                href={safeHref(c.website || '')}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Сайт компании ↗
+              </a>
+            )}
+            {safeHref(c.sourceUrl || '') && (
+              <a
+                className="text-link"
+                href={safeHref(c.sourceUrl || '')}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Источник данных ↗
+              </a>
+            )}
             <Link className="text-link small" href={`/companies/${id}/correction`}>
               Сообщить об ошибке в карточке →
             </Link>
@@ -241,8 +282,7 @@ export function CompanyPage({
               <h3>Открытый заказ</h3>
               <h3>{order.title}</h3>
               <p>
-                {order.budgetMin.toLocaleString('ru-RU')} –{' '}
-                {order.budgetMax.toLocaleString('ru-RU')} ₸ · До {dateLabel(order.deadline)}
+                {budgetLabel(order.budgetMin, order.budgetMax)} · {deadlineLabel(order.deadline)}
               </p>
               <Link className="button align-start" href={`/orders/${order.id}`}>
                 Посмотреть заказ

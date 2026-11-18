@@ -1,12 +1,14 @@
 'use client';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AccountShell } from '@/components/layout/account-shell';
 import { AccountAccess } from '@/features/account/account-access';
-import { Field, Textarea, Notice, EmptyState, money, dateLabel } from '@/components/ui/primitives';
+import { Field, Textarea, Notice, EmptyState } from '@/components/ui/primitives';
 import { useAppState, updateDemo } from '@/lib/state/store';
 import { validateOrder } from '@/lib/state/order-actions';
+import { orderFields } from '@/lib/api/form-fields';
 import type { Order } from '@/types/domain';
 export function OrderEditor({ id, preview = false }: { id?: string; preview?: boolean }) {
   const state = useAppState(),
@@ -16,17 +18,26 @@ export function OrderEditor({ id, preview = false }: { id?: string; preview?: bo
   function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    let fields;
+    try {
+      fields = orderFields(f);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Проверьте поля заказа.');
+      return;
+    }
     const next: Order = {
       id: order?.id || crypto.randomUUID(),
       companyId: state.company.id,
       companyName: state.company.name,
       city: state.company.city,
-      title: String(f.get('title')).trim(),
-      description: String(f.get('description')).trim(),
-      budgetMin: Number(f.get('min')),
-      budgetMax: Number(f.get('max')),
-      deadline: String(f.get('deadline')),
+      title: fields.title,
+      description: fields.description,
+      budgetMin: fields.budget_min,
+      budgetMax: fields.budget_max,
+      deadline: fields.deadline,
       status: 'draft',
+      visibility: false,
+      selectedApplicationId: null,
       applicationsCount: 0,
       publishedAt: new Date().toISOString().slice(0, 10),
     };
@@ -63,10 +74,8 @@ export function OrderEditor({ id, preview = false }: { id?: string; preview?: bo
               <h3>О задаче</h3>
               <p className="preserve-lines">{order.description}</p>
               <hr />
-              <h2>
-                {money(order.budgetMin)} – {money(order.budgetMax)}
-              </h2>
-              <p>До {dateLabel(order.deadline)}</p>
+              <h2>{budgetLabel(order.budgetMin, order.budgetMax)}</h2>
+              <p>{deadlineLabel(order.deadline)}</p>
             </article>
             <div className="button-row">
               <button
@@ -84,6 +93,7 @@ export function OrderEditor({ id, preview = false }: { id?: string; preview?: bo
                         ? {
                             ...o,
                             status: 'open',
+                            visibility: true,
                             publishedAt: new Date().toISOString().slice(0, 10),
                           }
                         : o,
@@ -120,28 +130,29 @@ export function OrderEditor({ id, preview = false }: { id?: string; preview?: bo
               minLength={20}
               maxLength={10000}
             />
+            <p className="small muted">
+              Бюджет и срок можно оставить пустыми и согласовать с исполнителем.
+            </p>
             <div className="form-grid">
               <Field
                 label="Бюджет от, ₸"
                 name="min"
                 type="number"
-                min={1}
+                min={0}
                 max={1000000000}
-                step={1}
+                step="any"
                 placeholder="120 000"
-                defaultValue={order?.budgetMin}
-                required
+                defaultValue={order?.budgetMin ?? ''}
               />
               <Field
                 label="Бюджет до, ₸"
                 name="max"
                 type="number"
-                min={1}
+                min={0}
                 max={1000000000}
-                step={1}
+                step="any"
                 placeholder="180 000"
-                defaultValue={order?.budgetMax}
-                required
+                defaultValue={order?.budgetMax ?? ''}
               />
             </div>
             <div className="form-grid">
@@ -150,8 +161,7 @@ export function OrderEditor({ id, preview = false }: { id?: string; preview?: bo
                 name="deadline"
                 type="date"
                 min={new Date().toISOString().slice(0, 10)}
-                defaultValue={order?.deadline}
-                required
+                defaultValue={order?.deadline ?? ''}
               />
             </div>
             <p className="small muted">Компания: {state.company.name}</p>

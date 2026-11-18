@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Company } from '@/types/domain';
 import { useAppState, updateDemo } from '@/lib/state/store';
 import { mutate } from '@/lib/api/resources';
+import { dateLabel } from '@/lib/format';
 import styles from './company-card.module.css';
 export const statusLabels = {
   not_found: 'Сайт не найден',
@@ -63,18 +64,15 @@ export function CompanyCard({ company }: { company: Company }) {
           {saved ? 'Сохранено' : 'Сохранить'}
         </button>
       </div>
-      <p className={`muted ${styles.description}`}>{company.description}</p>
+      <p className={`muted ${styles.description}`}>{company.address || 'Адрес не указан'}</p>
       <div className={styles.bottom}>
         <span className={`badge ${company.websiteStatus === 'found' ? '' : 'amber'}`}>
           {statusLabels[company.websiteStatus]}
         </span>
         <span className="caption muted">
-          Проверено{' '}
-          {new Date(company.checkedAt + 'T12:00:00Z').toLocaleDateString('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            timeZone: 'UTC',
-          })}
+          {company.checkedAt
+            ? `Проверено ${dateLabel(company.checkedAt)}`
+            : 'Проверка не проводилась'}
         </span>
         <Link href={`/companies/${company.id}`}>О компании →</Link>
       </div>

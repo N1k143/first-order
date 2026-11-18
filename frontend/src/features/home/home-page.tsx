@@ -9,7 +9,7 @@ export function HomePage() {
   const state = useAppState();
   const orders = useResource(
     '/orders?status=open',
-    state.orders.filter((o) => o.status === 'open'),
+    state.orders.filter((o) => o.status === 'open' && o.visibility !== false),
   );
   const featuredOrder = orders.data?.[0];
   return (

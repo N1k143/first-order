@@ -1,12 +1,11 @@
 import type { ProfileUpdate, PortfolioItemUpdate } from '@/types/database';
 
-function optionalText(value: FormDataEntryValue | null): string | null {
-  return typeof value === 'string' ? value.trim() || null : null;
-}
+import { optionalText } from './form-fields';
 
 export function profileFields(form: FormData): ProfileUpdate {
   return {
     name: optionalText(form.get('name')) || '',
+    avatar_url: optionalText(form.get('avatar_url')),
     bio: optionalText(form.get('bio')),
     skills: optionalText(form.get('skills')),
     github_url: optionalText(form.get('github')),

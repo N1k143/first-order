@@ -17,11 +17,14 @@ export function OrdersPage() {
   const rows = state.orders.filter(
     (o) =>
       o.status !== 'draft' &&
+      o.visibility !== false &&
       (!p.get('q') ||
         `${o.title} ${o.description}`.toLowerCase().includes(p.get('q')!.toLowerCase())) &&
       (!p.get('city') || p.get('city') === o.city) &&
-      (!p.get('min') || o.budgetMax >= Number(p.get('min'))) &&
-      (!p.get('max') || o.budgetMin <= Number(p.get('max'))) &&
+      (!p.get('min') ||
+        (o.budgetMax !== null ? o.budgetMax >= Number(p.get('min')) : o.budgetMin !== null)) &&
+      (!p.get('max') ||
+        (o.budgetMin !== null ? o.budgetMin <= Number(p.get('max')) : o.budgetMax !== null)) &&
       (!p.get('status') || o.status === p.get('status')),
   );
   const resource = useResource('/orders?' + p.toString(), rows);

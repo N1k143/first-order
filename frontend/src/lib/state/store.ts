@@ -1,5 +1,6 @@
 'use client';
 import { useSyncExternalStore } from 'react';
+import { migrateDemoState } from './migrate';
 import { initialState } from '@/data/demo';
 import type { AppState } from '@/types/domain';
 export const DEMO = process.env.NEXT_PUBLIC_DATA_MODE !== 'api';
@@ -25,7 +26,6 @@ const emptyState: AppState = {
     city: '',
     category: '',
     address: '',
-    description: '',
     websiteStatus: 'needs_review',
     checkedAt: '',
   },
@@ -58,7 +58,7 @@ function load() {
         Array.isArray(value.orders) &&
         Array.isArray(value.applications)
       )
-        state = { ...initialState, ...value };
+        state = migrateDemoState({ ...initialState, ...value });
     } catch {
       /* Unavailable storage or outdated demo state: start with fixtures. */
     }

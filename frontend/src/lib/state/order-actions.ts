@@ -19,16 +19,17 @@ export function validateOrder(
   if (order.title.trim().length < 5) return 'Название должно содержать не менее 5 символов.';
   if (order.description.trim().length < 20) return 'Опишите задачу подробнее: минимум 20 символов.';
   if (
-    !Number.isFinite(order.budgetMin) ||
-    !Number.isFinite(order.budgetMax) ||
-    order.budgetMin <= 0 ||
-    order.budgetMax < order.budgetMin
+    (order.budgetMin !== null && (!Number.isFinite(order.budgetMin) || order.budgetMin < 0)) ||
+    (order.budgetMax !== null && (!Number.isFinite(order.budgetMax) || order.budgetMax < 0)) ||
+    (order.budgetMin !== null && order.budgetMax !== null && order.budgetMax < order.budgetMin)
   )
     return 'Укажите корректный бюджет: верхняя граница не может быть меньше нижней.';
   if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(order.deadline) ||
-    !Number.isFinite(Date.parse(order.deadline)) ||
-    order.deadline < today
+    order.deadline !== null &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(order.deadline) ||
+      !Number.isFinite(Date.parse(order.deadline)) ||
+      new Date(order.deadline).toISOString().slice(0, 10) !== order.deadline ||
+      order.deadline < today)
   )
     return 'Выберите сегодняшнюю или будущую дату.';
   return '';
@@ -47,7 +48,7 @@ export function selectContractor(s: AppState, orderId: string, applicationId: st
   return {
     ...s,
     orders: s.orders.map((o) =>
-      o.id === orderId ? { ...o, status: 'in_progress', contractorId: app.profileId } : o,
+      o.id === orderId ? { ...o, status: 'in_progress', selectedApplicationId: app.id } : o,
     ),
     applications: s.applications.map((a) =>
       a.orderId === orderId && a.status === 'pending'
