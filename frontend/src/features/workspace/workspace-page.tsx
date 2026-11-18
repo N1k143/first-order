@@ -232,6 +232,16 @@ export function WorkspacePage({
                   description: String(f.get('description')).trim(),
                   email: String(f.get('email')).trim(),
                   phone: String(f.get('phone')).trim(),
+                  address: String(f.get('address')).trim(),
+                  category: String(f.get('category')).trim(),
+                  website: String(f.get('website')).trim(),
+                  initials: String(f.get('name'))
+                    .trim()
+                    .split(/\s+/)
+                    .map((part) => part[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase(),
                 },
                 orders: s.orders.map((o) =>
                   o.companyId === s.company.id
@@ -255,6 +265,27 @@ export function WorkspacePage({
               maxLength={120}
             />
             <Field label="Город" name="city" defaultValue={state.company.city} required />
+            <Field
+              label="Сфера деятельности"
+              name="category"
+              defaultValue={state.company.category}
+              required
+              maxLength={120}
+            />
+            <Field
+              label="Адрес компании"
+              name="address"
+              defaultValue={state.company.address}
+              maxLength={300}
+            />
+            <Field
+              label="Сайт компании"
+              name="website"
+              type="url"
+              pattern="https?://.*"
+              defaultValue={state.company.website}
+              placeholder="https://example.com"
+            />
             <Textarea
               label="Описание"
               name="description"

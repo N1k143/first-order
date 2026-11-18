@@ -147,3 +147,14 @@
     padding-block: 32px;
   }
 }
+
+.avatarLink {
+  display: inline-flex;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+@media (max-width: 700px) {
+  .actions {
+    gap: 12px;
+  }
+}

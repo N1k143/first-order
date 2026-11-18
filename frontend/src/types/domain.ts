@@ -30,6 +30,8 @@ export interface Order {
   contractorId?: string;
 }
 export interface Profile {
+  /** Local demo avatar. The supplied profiles table has no avatar column. */
+  avatarUrl?: string;
   id: string;
   name: string;
   email: string;

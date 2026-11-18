@@ -92,3 +92,12 @@ export function updateDemo(update: (current: AppState) => AppState) {
 export function resetDemo() {
   updateDemo(() => structuredClone(initialState));
 }
+
+/** Delay editable forms until persisted demo data has been loaded. */
+export function useStoreReady() {
+  return useSyncExternalStore(
+    subscribe,
+    () => initialized,
+    () => false,
+  );
+}

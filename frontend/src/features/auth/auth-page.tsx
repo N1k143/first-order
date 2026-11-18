@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { DEMO, updateDemo, useAppState } from '@/lib/state/store';
 import { apiRequest } from '@/lib/api/client';
 import { companies } from '@/data/demo';
-import { PageHeading, Field, Notice } from '@/components/ui/primitives';
-type View = 'roles' | 'register' | 'company' | 'login' | 'forgot' | 'reset' | 'verify';
+import { Field, Notice } from '@/components/ui/primitives';
+import { AuthLayout, type AuthView as View, type AuthRole } from './auth-layout';
 const headings: Record<View, [string, string]> = {
   roles: ['Начнём с вашей роли', 'Создайте аккаунт, чтобы работать с компаниями и заказами.'],
   register: ['Создать аккаунт разработчика', 'Первый шаг к вашему первому проекту.'],
@@ -16,7 +16,7 @@ const headings: Record<View, [string, string]> = {
   reset: ['Задайте новый пароль', 'Выберите пароль, который вы ещё не использовали.'],
   verify: ['Проверьте почту', 'Подтвердите email, чтобы начать работу.'],
 };
-export function AuthPage({ view }: { view: View }) {
+export function AuthPage({ view, entryRole }: { view: View; entryRole?: AuthRole }) {
   const state = useAppState(),
     router = useRouter(),
     params = useSearchParams();
@@ -24,7 +24,19 @@ export function AuthPage({ view }: { view: View }) {
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [addCompany, setAddCompany] = useState(false);
-  const [title, description] = headings[view];
+  const role: AuthRole =
+    view === 'company'
+      ? 'company'
+      : view === 'register'
+        ? 'developer'
+        : entryRole || (params.get('role') === 'company' ? 'company' : 'developer');
+  const [defaultTitle, description] = headings[view];
+  const title =
+    view === 'login'
+      ? role === 'company'
+        ? 'Вход для компании'
+        : 'Вход для разработчика'
+      : defaultTitle;
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
@@ -67,14 +79,13 @@ export function AuthPage({ view }: { view: View }) {
               ...s.profile,
               email: String(values.email),
               name: String(values.name || s.profile.name),
-              role:
-                view === 'company' ? 'company' : view === 'register' ? 'developer' : s.profile.role,
+              role,
             },
             company: selected || newCompany || s.company,
           }));
           router.push(
             view === 'login'
-              ? state.profile.role === 'company'
+              ? role === 'company'
                 ? '/workspace'
                 : '/dashboard'
               : `/verify-email?role=${view === 'company' ? 'company' : 'developer'}`,
@@ -96,12 +107,13 @@ export function AuthPage({ view }: { view: View }) {
           method: 'POST',
           body: {
             ...values,
-            role: view === 'company' ? 'company' : 'developer',
+            role,
             token: params.get('token'),
           },
         });
-        if (view === 'login') router.push('/dashboard');
-        else if (view === 'register' || view === 'company') router.push('/verify-email');
+        if (view === 'login') router.push(role === 'company' ? '/workspace' : '/dashboard');
+        else if (view === 'register' || view === 'company')
+          router.push(`/verify-email?role=${role}`);
         else setMessage('Запрос принят. Проверьте почту.');
       }
     } catch (e) {
@@ -112,9 +124,8 @@ export function AuthPage({ view }: { view: View }) {
   }
   if (view === 'roles')
     return (
-      <section className="container page stack-lg">
-        <PageHeading title={title} description={description} />
-        <div className="form-grid">
+      <AuthLayout title={title} description={description} view={view} role={role}>
+        <div className="stack-lg">
           {[
             {
               title: 'Я разработчик',
@@ -144,12 +155,11 @@ export function AuthPage({ view }: { view: View }) {
         <Link className="text-link" href="/login">
           Уже есть аккаунт? Войти
         </Link>
-      </section>
+      </AuthLayout>
     );
   if (view === 'verify')
     return (
-      <section className="container page">
-        <PageHeading title={title} description={description} />
+      <AuthLayout title={title} description={description} view={view} role={role}>
         <div className="card stack auth-card">
           <h3>Письмо для {state.profile.email}</h3>
           <p className="muted">
@@ -166,7 +176,7 @@ export function AuthPage({ view }: { view: View }) {
               <Notice>Деморежим: реальное письмо не отправляется.</Notice>
               <Link
                 className="button secondary"
-                href={params.get('role') === 'company' ? '/workspace' : '/profile/edit'}
+                href={role === 'company' ? '/workspace' : '/profile/edit'}
               >
                 Продолжить в деморежиме
               </Link>
@@ -175,19 +185,23 @@ export function AuthPage({ view }: { view: View }) {
           {message && <Notice>{message}</Notice>}
           {error && <Notice error>{error}</Notice>}
         </div>
-      </section>
+      </AuthLayout>
     );
   const register = view === 'register' || view === 'company';
   return (
-    <section className="container page">
-      <PageHeading title={title} description={description} />
-      <div
-        className={view === 'register' ? 'auth-columns' : view === 'company' ? 'two-columns' : ''}
-      >
-        <form
-          className={`card stack mobile-flat ${view === 'company' ? '' : 'auth-card'}`}
-          onSubmit={submit}
-        >
+    <AuthLayout title={title} description={description} view={view} role={role}>
+      <>
+        {view === 'login' && (
+          <nav className="tabs" aria-label="Роль для входа">
+            <Link href="/login/developer" aria-current={role === 'developer' ? 'page' : undefined}>
+              Разработчик
+            </Link>
+            <Link href="/login/company" aria-current={role === 'company' ? 'page' : undefined}>
+              Компания
+            </Link>
+          </nav>
+        )}
+        <form className="card stack mobile-flat auth-card" onSubmit={submit}>
           {register && (
             <Field
               label={view === 'company' ? 'Ваше имя' : 'Имя и фамилия'}
@@ -258,7 +272,7 @@ export function AuthPage({ view }: { view: View }) {
             </>
           )}
           {view === 'login' && (
-            <Link className="text-link small" href="/forgot-password">
+            <Link className="text-link small" href={`/forgot-password?role=${role}`}>
               Не помню пароль
             </Link>
           )}
@@ -290,8 +304,8 @@ export function AuthPage({ view }: { view: View }) {
               </Link>
             </>
           )}
-          {view === 'register' && (
-            <Link href="/login" className="text-link small">
+          {register && (
+            <Link href={`/login/${role}`} className="text-link small">
               Уже есть аккаунт? Войти
             </Link>
           )}
@@ -301,34 +315,14 @@ export function AuthPage({ view }: { view: View }) {
               {DEMO && view === 'forgot' && (
                 <>
                   {' '}
-                  <Link href="/reset-password">Открыть форму нового пароля →</Link>
+                  <Link href={`/reset-password?role=${role}`}>Открыть форму нового пароля →</Link>
                 </>
               )}
             </Notice>
           )}
           {error && <Notice error>{error}</Notice>}
         </form>
-        {view === 'register' && (
-          <aside className="auth-promo">
-            <h2>
-              Опыт появляется
-              <br />с первой задачи.
-            </h2>
-            <p>
-              Соберите профиль, добавьте учебные работы и найдите компанию, которой сможете помочь.
-            </p>
-          </aside>
-        )}
-        {view === 'company' && (
-          <aside className="card stack soft-card desktop-only">
-            <h3>Уже есть карточка?</h3>
-            <p className="small muted">
-              Выберите компанию из каталога, чтобы не создавать дубликат. Изменение опубликованных
-              данных проходит проверку.
-            </p>
-          </aside>
-        )}
-      </div>
-    </section>
+      </>
+    </AuthLayout>
   );
 }

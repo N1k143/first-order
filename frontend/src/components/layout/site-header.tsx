@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAppState } from '@/lib/state/store';
 import styles from './site-shell.module.css';
+import { Avatar } from '@/components/ui/avatar';
 
 export function SiteHeader() {
   const state = useAppState();
@@ -12,12 +13,6 @@ export function SiteHeader() {
     /^\/(workspace|dashboard|applications|saved|contacts|profile|settings|moderation)(\/|$)/.test(
       path,
     );
-  const initials = state.profile.name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('');
   const dashboard =
     state.profile.role === 'company'
       ? '/workspace'
@@ -47,13 +42,9 @@ export function SiteHeader() {
           >
             {state.signedIn ? 'Мой кабинет' : 'Войти'}
           </Link>
-          {state.signedIn && accountPage && (
-            <Link
-              className={`${styles.accountLink} text-link`}
-              href="/profile"
-              aria-label="Мой профиль"
-            >
-              {initials}
+          {state.signedIn && (
+            <Link className={styles.avatarLink} href="/profile" aria-label="Мой профиль">
+              <Avatar name={state.profile.name} src={state.profile.avatarUrl} />
             </Link>
           )}
           <details key={path} className={styles.menu}>

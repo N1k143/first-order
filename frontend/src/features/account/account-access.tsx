@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
-import { useAppState, updateDemo, DEMO } from '@/lib/state/store';
+import { useAppState, useStoreReady, updateDemo, DEMO } from '@/lib/state/store';
 import { EmptyState, Notice } from '@/components/ui/primitives';
 import { checkBackendHealth } from '@/lib/api/client';
 export function BackendStatus() {
@@ -48,6 +48,13 @@ export function AccountAccess({
   company?: boolean;
 }) {
   const state = useAppState();
+  const ready = useStoreReady();
+  if (!ready)
+    return (
+      <div className="card" role="status">
+        Загрузка профиля…
+      </div>
+    );
   if (!DEMO)
     return (
       <div className="card stack">

@@ -12,6 +12,9 @@ import { useAppState, updateDemo, resetDemo } from '@/lib/state/store';
 import { safeHref } from '@/lib/api/resources';
 import { applicationLabels, withdrawApplication } from '@/lib/state/order-actions';
 import { AccountAccess, BackendStatus } from './account-access';
+import { ProfileEditor } from './profile-editor';
+import { Avatar } from '@/components/ui/avatar';
+import { portfolioFields } from '@/lib/api/profile-fields';
 
 type View =
   | 'dashboard'
@@ -206,6 +209,7 @@ export function AccountPage({ view }: { view: View }) {
         {view === 'profile' && (
           <>
             <article className="card stack">
+              <Avatar name={profile.name} src={profile.avatarUrl} size={80} />
               <h2>{profile.headline || 'Разработчик'}</h2>
               <p className="muted">{profile.city}</p>
               <p className="preserve-lines">{profile.bio || 'Добавьте несколько слов о себе.'}</p>
@@ -274,69 +278,7 @@ export function AccountPage({ view }: { view: View }) {
               <Link href="/profile/portfolio">Портфолио</Link>
               <Link href="/profile">Предпросмотр профиля</Link>
             </nav>
-            <form
-              className="card stack"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                updateDemo((s) => ({
-                  ...s,
-                  profile: {
-                    ...s.profile,
-                    name: String(f.get('name')).trim(),
-                    headline: String(f.get('headline')).trim(),
-                    city: String(f.get('city')).trim(),
-                    bio: String(f.get('bio')).trim(),
-                    skills: [
-                      ...new Set(
-                        String(f.get('skills'))
-                          .split(',')
-                          .map((v) => v.trim())
-                          .filter(Boolean),
-                      ),
-                    ],
-                    github: String(f.get('github')).trim(),
-                  },
-                }));
-                setMessage('Профиль сохранён в этом браузере.');
-              }}
-            >
-              <Field
-                label="Имя и фамилия"
-                name="name"
-                defaultValue={profile.name}
-                required
-                maxLength={100}
-              />
-              <Field
-                label="Специализация"
-                name="headline"
-                defaultValue={profile.headline}
-                maxLength={160}
-              />
-              <Field label="Город" name="city" defaultValue={profile.city} required />
-              <Textarea label="О себе" name="bio" defaultValue={profile.bio} maxLength={2000} />
-              <Field
-                label="Навыки через запятую"
-                name="skills"
-                defaultValue={profile.skills.join(', ')}
-                maxLength={300}
-              />
-              <Field
-                label="GitHub или сайт"
-                name="github"
-                type="url"
-                pattern="https?://.*"
-                defaultValue={profile.github}
-                placeholder="https://github.com/username"
-              />
-              <div className="button-row">
-                <button className="button">Сохранить изменения</button>
-                <Link className="button secondary" href="/profile/portfolio">
-                  Добавить работу
-                </Link>
-              </div>
-            </form>
+            <ProfileEditor key={profile.id} />
           </>
         )}
         {view === 'portfolio' && (
@@ -347,15 +289,20 @@ export function AccountPage({ view }: { view: View }) {
                 e.preventDefault();
                 const form = e.currentTarget;
                 const f = new FormData(form);
+                const fields = portfolioFields(f);
+                if (!fields.title) {
+                  setMessage('Укажите название работы.');
+                  return;
+                }
                 updateDemo((s) => ({
                   ...s,
                   portfolio: [
                     ...s.portfolio,
                     {
                       id: crypto.randomUUID(),
-                      title: String(f.get('title')).trim(),
-                      description: String(f.get('description')).trim(),
-                      url: String(f.get('url')).trim(),
+                      title: fields.title,
+                      description: fields.description || '',
+                      url: fields.project_url || '',
                     },
                   ],
                 }));
@@ -364,14 +311,8 @@ export function AccountPage({ view }: { view: View }) {
               }}
             >
               <h3>Добавить работу</h3>
-              <Field label="Название проекта" name="title" required minLength={3} maxLength={120} />
-              <Textarea
-                label="Описание и ваша роль"
-                name="description"
-                required
-                minLength={10}
-                maxLength={2000}
-              />
+              <Field label="Название проекта" name="title" required minLength={1} maxLength={120} />
+              <Textarea label="Описание и ваша роль" name="description" maxLength={2000} />
               <Field
                 label="Ссылка на проект"
                 name="url"
@@ -385,13 +326,60 @@ export function AccountPage({ view }: { view: View }) {
               <button className="button align-start">Добавить в портфолио</button>
             </form>
             {state.portfolio.map((p) => (
-              <article className="card stack" key={p.id}>
+              <form
+                className="card stack"
+                key={p.id}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const values = new FormData(event.currentTarget);
+                  const fields = portfolioFields(values);
+                  if (!fields.title) {
+                    setMessage('Укажите название работы.');
+                    return;
+                  }
+                  updateDemo((s) => ({
+                    ...s,
+                    portfolio: s.portfolio.map((item) =>
+                      item.id === p.id
+                        ? {
+                            ...item,
+                            title: fields.title,
+                            description: fields.description || '',
+                            url: fields.project_url || '',
+                          }
+                        : item,
+                    ),
+                  }));
+                  setMessage('Работа обновлена.');
+                }}
+              >
                 <h3>{p.title}</h3>
-                <p>{p.description}</p>
-                <button className="text-button" onClick={() => setRemove(p.id)}>
+                <Field
+                  label="Название работы"
+                  name="title"
+                  defaultValue={p.title}
+                  required
+                  minLength={1}
+                  maxLength={120}
+                />
+                <Textarea
+                  label="Описание работы"
+                  name="description"
+                  defaultValue={p.description}
+                  maxLength={2000}
+                />
+                <Field
+                  label="Адрес проекта"
+                  name="url"
+                  type="url"
+                  pattern="https?://.*"
+                  defaultValue={p.url}
+                />
+                <button className="button secondary align-start">Сохранить работу</button>
+                <button type="button" className="text-button" onClick={() => setRemove(p.id)}>
                   Удалить работу
                 </button>
-              </article>
+              </form>
             ))}
           </>
         )}
