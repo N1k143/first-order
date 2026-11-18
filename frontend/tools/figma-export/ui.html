@@ -1,0 +1,28 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><style>body{font:14px/1.5 Arial;padding:18px;color:#202923}h2{font-size:20px}button,select{font:inherit;padding:10px;border:1px solid #dde2da;border-radius:6px}button{background:#245c45;color:white;cursor:pointer}button:disabled{opacity:.5}#status{margin-top:16px}a[hidden]{display:none}a{display:inline-block;margin-top:16px;color:#245c45}</style><h2>Выгрузка для фронтенда</h2><p>JSON слоёв и стилей, SVG с текстом, PNG 1× и исходные изображения. Макеты не изменяются.</p><p><select id="scope" aria-label="Что экспортировать"><option value="all">Все страницы файла</option><option value="current">Только текущая страница</option></select></p><button id="run">Подготовить ZIP</button><div id="status" role="status">Без API-ключа и сетевых запросов.</div><a id="download" hidden>Скачать архив</a><script>/* Small uncompressed ZIP writer; UTF-8 filenames, no external dependencies. */
+function buildZip(files) {
+  const enc = new TextEncoder(), records = [], central = [];
+  let offset = 0;
+  const crc32 = (bytes) => {
+    let crc = 0xffffffff;
+    for (const byte of bytes) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1)); }
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  for (const file of files) {
+    const name = enc.encode(file.file), data = typeof file.data === 'string' ? enc.encode(file.data) : new Uint8Array(file.data);
+    const crc = crc32(data), local = new Uint8Array(30 + name.length), v = new DataView(local.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x800, true);
+    v.setUint32(14, crc, true); v.setUint32(18, data.length, true); v.setUint32(22, data.length, true); v.setUint16(26, name.length, true); local.set(name, 30);
+    const entry = new Uint8Array(46 + name.length), c = new DataView(entry.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x800, true);
+    c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, offset, true); entry.set(name, 46);
+    records.push(local, data); central.push(entry); offset += local.length + data.length;
+  }
+  const size = central.reduce((sum, item) => sum + item.length, 0), end = new Uint8Array(22), e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, offset, true);
+  return new Blob([...records, ...central, end], { type: 'application/zip' });
+}
+if (typeof module !== 'undefined') module.exports = { buildZip };
+
+let files=[],lastUrl;const run=document.getElementById('run'),status=document.getElementById('status'),download=document.getElementById('download');
+run.onclick=()=>{files=[];download.hidden=true;run.disabled=true;status.textContent='Чтение макетов…';parent.postMessage({pluginMessage:{type:'export',scope:document.getElementById('scope').value}},'*')};
+onmessage=event=>{const m=event.data.pluginMessage;if(!m)return;if(m.type==='file')files.push(m);if(m.type==='progress')status.textContent=m.text;if(m.type==='error'){status.textContent=m.text;run.disabled=false}if(m.type==='done'){if(lastUrl)URL.revokeObjectURL(lastUrl);lastUrl=URL.createObjectURL(buildZip(files));download.href=lastUrl;download.download='firstorder-design-export.zip';download.hidden=false;status.textContent=`Готово: ${m.count} фреймов. Ошибок: ${m.failures}. ${m.failures?'Подробности в index.json.':''}`;run.disabled=false;}};</script></html>
