@@ -1,9 +1,17 @@
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string, public readonly details?: unknown) {
-    super(message); this.name = 'ApiError';
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
   }
 }
-export interface RequestOptions extends Omit<RequestInit, 'body'> { body?: unknown; timeoutMs?: number; }
+export interface RequestOptions extends Omit<RequestInit, 'body'> {
+  body?: unknown;
+  timeoutMs?: number;
+}
 /** Relative, same-origin requests. Session cookies never enter localStorage. */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
@@ -15,25 +23,40 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   headers.set('Accept', 'application/json, text/plain');
   const timeout = AbortSignal.timeout(timeoutMs);
   const response = await fetch(`/api${path}`, {
-    ...init, headers, credentials: 'include', cache: 'no-store',
+    ...init,
+    headers,
+    credentials: 'include',
+    cache: 'no-store',
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const text = response.status === 204 ? '' : await response.text();
   let payload: unknown = text || undefined;
   if (text && response.headers.get('content-type')?.includes('application/json')) {
-    try { payload = JSON.parse(text); }
-    catch { throw new ApiError(response.status, 'Сервер вернул некорректный ответ. Попробуйте позже.'); }
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new ApiError(response.status, 'Сервер вернул некорректный ответ. Попробуйте позже.');
+    }
   }
   if (!response.ok) {
     const messages: Record<number, string> = {
-      400: 'Проверьте введённые данные.', 401: 'Войдите в аккаунт, чтобы продолжить.',
-      403: 'Недостаточно прав для этого действия.', 404: 'Запрошенный ресурс не найден.',
-      409: 'Данные уже изменились. Обновите страницу.', 422: 'Проверьте заполнение формы.',
+      400: 'Проверьте введённые данные.',
+      401: 'Войдите в аккаунт, чтобы продолжить.',
+      403: 'Недостаточно прав для этого действия.',
+      404: 'Запрошенный ресурс не найден.',
+      409: 'Данные уже изменились. Обновите страницу.',
+      422: 'Проверьте заполнение формы.',
       429: 'Слишком много запросов. Попробуйте немного позже.',
     };
-    throw new ApiError(response.status, messages[response.status] || 'Не удалось получить данные. Попробуйте позже.', payload);
+    throw new ApiError(
+      response.status,
+      messages[response.status] || 'Не удалось получить данные. Попробуйте позже.',
+      payload,
+    );
   }
   return payload as T;
 }
-export function checkBackendHealth(signal?: AbortSignal) { return apiRequest<string>('/health', { signal }); }
+export function checkBackendHealth(signal?: AbortSignal) {
+  return apiRequest<string>('/health', { signal });
+}
