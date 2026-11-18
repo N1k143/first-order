@@ -51,3 +51,43 @@ textarea.field { min-height: 120px; resize: vertical; }
 @media (max-width: 1100px) { .container { width: calc(100% - 64px); } }
 @media (max-width: 700px) { .container { width: calc(100% - 40px); } h1 { font-size: 28px; line-height: 36px; } .page { padding-block: 32px 40px; } .card { padding: 20px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; } }
+hr { margin: 0; border: 0; border-top: 1px solid var(--border); width: 100%; }
+.form-field { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 20px; font-weight: 500; }
+.form-field .field { font-size: 16px; line-height: 24px; font-weight: 400; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.two-columns { display: grid; grid-template-columns: minmax(0,848fr) minmax(0,400fr); gap: 32px; align-items: start; }
+.auth-columns { display: grid; grid-template-columns: minmax(0,640px) minmax(0,560px); gap: 80px; align-items: start; }
+.auth-card { width: min(640px,100%); }
+.auth-promo { padding: 40px; background: var(--green); color: white; border-radius: 8px; display: flex; flex-direction: column; gap: 24px; }
+.auth-promo h2 { font-size: 36px; line-height: 44px; }
+.button-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.button-row .button { min-width: 130px; }
+.full-width { width: 100%; }
+.align-start { align-self: flex-start; }
+.soft-card { background: var(--soft); }
+.notice { padding: 12px 16px; border-radius: 6px; background: var(--soft); color: var(--green); font-size: 14px; line-height: 20px; }
+.notice.error { background: #faeded; color: var(--danger); }
+.info-row { display: grid; grid-template-columns: 1.6fr 1fr auto; align-items: center; gap: 24px; background: white; padding: 20px; min-height: 64px; }
+.info-row > * { min-width: 0; overflow-wrap: anywhere; }
+.mobile-only { display: none !important; }
+.confirm-dialog { padding: 32px; width: min(560px,calc(100% - 32px)); border: 1px solid var(--border); border-radius: 8px; color: var(--ink); }
+.confirm-dialog::backdrop { background: #20292366; }
+.tabs { display: flex; gap: 32px; border-bottom: 1px solid var(--border); padding-bottom: 24px; overflow: auto; }
+.tabs a,.tabs button { white-space: nowrap; background: none; border: 0; padding: 0; color: var(--muted); font-weight: 500; }
+.tabs [aria-current],.tabs [aria-selected=true] { color: var(--green); }
+.text-button { padding: 0; border: 0; background: none; color: var(--green); text-align: left; }
+.stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+.stat { display: flex; flex-direction: column; gap: 12px; }
+.stat strong { color: var(--green); font-size: 36px; line-height: 44px; font-weight: 600; }
+.skeleton { min-height: 160px; color: var(--muted); }
+.account-grid { display: grid; grid-template-columns: 248px minmax(0,1fr); gap: 32px; align-items: start; }
+.account-nav { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 8px; background: white; font-size: 14px; line-height: 20px; }
+.account-nav a { padding: 12px; color: var(--muted); }
+.account-nav a[aria-current] { color: var(--green); background: var(--soft); }
+.portfolio-cover { background: var(--soft); display: flex; align-items: center; gap: 24px; padding: 24px; }
+.portfolio-cover > strong { font-size: 56px; line-height: 62px; color: var(--green); font-weight: 600; }
+.check-label { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+input[type=checkbox],input[type=radio] { accent-color: var(--green); }
+@media(max-width:1000px) { .auth-columns { gap:32px; grid-template-columns:1fr 1fr; } .account-grid {grid-template-columns:210px minmax(0,1fr);} }
+@media(max-width:700px) { .mobile-only {display:block !important;} .desktop-only {display:none !important;} .two-columns,.auth-columns,.account-grid,.form-grid {grid-template-columns: minmax(0,1fr);} .account-grid {gap:24px;} .account-nav {display:none;} .auth-promo {display:none;} .form-grid {gap:16px;} .info-row {grid-template-columns:1fr;gap:8px;} .stats {gap:8px;} .stat {padding:12px;}.stat strong{font-size:28px;}.stat .small {font-size:12px;}.button-row .button{flex:1;} .portfolio-cover{padding:20px;gap:16px;}.portfolio-cover>strong{font-size:40px;} .page-heading{gap:24px;margin-bottom:24px;} .page-heading h1{font-size:24px;line-height:32px;} .card{padding:24px;} }
+@media(max-width:700px){.mobile-flat.card{border:0;background:transparent;padding:0;gap:24px;} .mobile-flat .form-field{gap:16px;} }
