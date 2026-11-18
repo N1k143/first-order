@@ -129,7 +129,7 @@
     font-size: 24px;
     line-height: 32px;
   }
-  .accountLink {
+  .headerInner .accountLink {
     display: none;
   }
   .menu summary {

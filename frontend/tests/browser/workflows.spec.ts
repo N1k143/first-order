@@ -132,6 +132,9 @@ test('new pages fit mobile screens and have no runtime errors', async ({ page },
     expect(await page.evaluate(() => document.documentElement.scrollWidth), route).toBe(390);
   }
   await useCompany(page);
+  await expect(
+    page.locator('header').getByRole('link', { name: 'Мой кабинет', exact: true }),
+  ).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath('order-editor-mobile.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   for (const route of [
