@@ -20,6 +20,15 @@ npm run build
 npm start
 ```
 
+## Браузерные проверки
+
+```sh
+npx playwright install chromium
+npm run test:browser
+```
+
+Можно использовать установленный Chrome: `CHROME_PATH=/usr/bin/google-chrome npm run test:browser`. Тестовый сервер запускается отдельно на порту 3120 и не переиспользует чужой сервер.
+
 ## Структура
 
 - `src/app`: маршруты App Router, общий layout, метаданные и 404.
