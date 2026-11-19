@@ -155,3 +155,11 @@
     gap: 24px;
   }
 }
+
+.withoutOrder {
+  grid-template-columns: minmax(0, 1fr);
+}
+.businessButton,
+.choiceButton {
+  max-width: 100%;
+}

@@ -107,7 +107,7 @@ export function CatalogPage() {
         </button>
         <button
           type="button"
-          className="button secondary mobile-only"
+          className={`button secondary mobile-only ${styles.filterToggle}`}
           onClick={() => dialog.current?.showModal()}
         >
           Фильтры · {params.get('city') === '' ? 'Все города' : params.get('city') || 'Астана'}
@@ -160,14 +160,6 @@ export function CatalogPage() {
                   </button>
                 )}
               </nav>
-              {page * size < data.data.total && (
-                <button
-                  className="button secondary mobile-only"
-                  onClick={() => change({ page: String(page + 1) })}
-                >
-                  Следующая страница
-                </button>
-              )}
               <p className={`caption muted ${styles.pageNote}`}>
                 Статус «сайт не найден» отражает результат проверки, а не подтверждённую потребность
                 компании.

@@ -158,3 +158,43 @@
     gap: 12px;
   }
 }
+
+/* Switch navigation before account actions squeeze the tablet header. */
+@media (min-width: 701px) and (max-width: 1100px) {
+  .headerInner .nav,
+  .actions .post,
+  .actions .accountLink,
+  .logout {
+    display: none;
+  }
+  .menu {
+    display: block;
+  }
+  .menu summary {
+    padding: 12px 16px;
+    min-height: 48px;
+    border-radius: 6px;
+    background: var(--soft);
+  }
+  .mobileNav {
+    top: 56px;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+  }
+}
+@media (max-width: 700px) {
+  .logout {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .brand {
+    font-size: 20px;
+  }
+  .headerInner {
+    gap: 12px;
+  }
+  .actions {
+    gap: 8px;
+  }
+}

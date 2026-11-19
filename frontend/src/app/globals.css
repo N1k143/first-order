@@ -644,3 +644,26 @@ p {
     line-height: 20px;
   }
 }
+
+@media (min-width: 701px) and (max-width: 900px) {
+  .account-grid,
+  .two-columns,
+  .auth-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+  }
+  .account-nav a {
+    white-space: nowrap;
+  }
+  .auth-card {
+    width: 100%;
+  }
+}
+.button,
+.text-link {
+  overflow-wrap: anywhere;
+}
