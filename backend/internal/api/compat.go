@@ -184,15 +184,8 @@ func frontendValue(v any) any {
 			}
 		}
 		if _, ok := x["budget_min"]; ok {
-			if m["budgetMin"] == nil {
-				m["budgetMin"] = 0
-			}
-			if m["budgetMax"] == nil {
-				m["budgetMax"] = 0
-			}
-			if m["deadline"] == nil {
-				m["deadline"] = ""
-			}
+			// Keep optional budget/deadline values unchanged so reading and
+			// re-saving a draft does not turn unset terms into zero/empty text.
 			m["publishedAt"] = x["created_at"]
 			if m["applicationsCount"] == nil {
 				m["applicationsCount"] = 0

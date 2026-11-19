@@ -1,13 +1,342 @@
 'use client';
+import { budgetLabel, deadlineLabel } from '@/lib/format';
 import Link from 'next/link';
-import {useState} from 'react';
-import {companies} from '@/data/demo';
-import {useAppState,updateDemo,DEMO} from '@/lib/state/store';
-import {useResource,mutate} from '@/lib/api/resources';
-import {PageHeading,InfoRow,Select,Textarea,Notice,ResourceState,EmptyState,dateLabel} from '@/components/ui/primitives';
-import {statusLabels} from './company-card';
-export function CompanyPage({id,view='detail'}:{id:string;view?:'detail'|'contacts'|'correction'}){const state=useAppState(),resource=useResource(`/companies/${encodeURIComponent(id)}`,companies.find(c=>c.id===id));const[message,setMessage]=useState(''),[error,setError]=useState(''),[pending,setPending]=useState(false);const c=resource.data;const contact=state.contacts.find(x=>x.companyId===id);const order=state.orders.find(o=>o.companyId===id&&o.status==='open');async function note(e:React.FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);setPending(true);setError('');try{const item={companyId:id,status:String(f.get('status')),note:String(f.get('note')),date:new Date().toISOString().slice(0,10)};await mutate(`/me/contacts/${id}`,'PATCH',item,()=>updateDemo(s=>({...s,contacts:[...s.contacts.filter(x=>x.companyId!==id),item]})));setMessage(DEMO?'Заметка сохранена в этом браузере.':'Заметка сохранена.');}catch(e){setError(e instanceof Error?e.message:'Ошибка сохранения.');}finally{setPending(false);}}const noteFields=<><Select label={view==='contacts'?'Статус взаимодействия':'Статус контакта'} name="status" defaultValue={contact?.status||'Планирую написать'}>{['Планирую написать','Написал','Ответили','Договорились','Не актуально'].map(s=><option key={s}>{s}</option>)}</Select><Textarea label={view==='contacts'?'Моя заметка':'Заметка'} name="note" placeholder="Что предложить и о чём договорились" defaultValue={contact?.note}/><button className="button" disabled={pending}>Сохранить</button>{message&&<Notice>{message}</Notice>}{error&&<Notice error>{error}</Notice>}</>;
-if(!c)return <section className="container page">{resource.loading||resource.error?<ResourceState error={resource.error} reload={resource.reload}/>:<EmptyState title="Карточка недоступна" description="Компания скрыта на время проверки или больше не опубликована." href="/companies" label="К каталогу"/>}</section>;
-if(view==='correction')return <section className="container page"><PageHeading title="Сообщить об ошибке" description={`${c.name} · Запрос будет рассмотрен модератором`}/><form className="card stack" style={{maxWidth:848}} onSubmit={async e=>{e.preventDefault();const value=String(new FormData(e.currentTarget).get('message'));setPending(true);try{await mutate(`/companies/${id}/corrections`,'POST',{message:value},()=>updateDemo(s=>({...s,corrections:[...s.corrections,{id:crypto.randomUUID(),companyId:id,message:value,status:'pending'}]})));setMessage(DEMO?'Обращение добавлено в демонстрационную очередь модерации.':'Запрос отправлен на проверку.');}catch(e){setError(e instanceof Error?e.message:'Ошибка отправки.');}finally{setPending(false);}}}><Textarea label="Что нужно исправить" name="message" required minLength={10} placeholder="Опишите ошибку и укажите актуальные данные. Добавьте ссылку на источник, если она есть."/><p className="muted">Ваше обращение не меняет карточку сразу. После проверки модератор примет или отклонит исправление.</p><button className="button align-start" disabled={pending}>Отправить на проверку</button>{message&&<Notice>{message}</Notice>}{error&&<Notice error>{error}</Notice>}</form></section>;
-if(view==='contacts')return <section className="container page"><PageHeading title={`Контакты ${c.name}`} description="Данные из открытого источника · Уточняйте актуальность при обращении"/><div className="two-columns"><form className="card stack" onSubmit={note}><h3>Связаться с компанией</h3><h2>{c.phone||'Телефон не указан'}</h2><p>{c.email||'Email не указан'}</p>{DEMO&&<p className="caption muted">Демонстрационные контактные данные для макета.</p>}<hr/>{noteFields}</form><aside className="card stack"><h3>Первое обращение</h3><p className="small muted">Представьтесь, кратко опишите пользу для бизнеса и приложите ссылку на портфолио.</p></aside></div></section>;
-return <section className="container page"><PageHeading title={c.name} description={<><Link href="/companies">Компании</Link> / {c.category} / {c.name}</>}/><div className="two-columns"><div className="stack-lg"><article className="card stack"><div><span className="badge amber">{statusLabels[c.websiteStatus]}</span></div><h2>{id==='arman-coffee'?'Кофейня в Астане':c.name}</h2><p>{id==='arman-coffee'?'Небольшая городская кофейня с завтраками, собственной выпечкой и двумя точками. Информация в карточке собрана из открытого источника.':c.description}</p><hr/><h3>Что можно предложить</h3><p>Сайт с меню, адресами и часами работы. Страницу для предзаказа и контактов. Перед предложением уточните потребности компании.</p></article><article className="card stack"><h3>Информация о компании</h3>{[['Город',c.city],['Адрес',c.address],['Сфера',c.category],['Проверка сайта',dateLabel(c.checkedAt)+' 2026'],['Источник','Открытый справочник']].map(([label,value])=><InfoRow key={label} label={label} value={value}/>)}<Link className="text-link small" href={`/companies/${id}/correction`}>Сообщить об ошибке в карточке →</Link></article>{order&&<article className="card stack"><h3>Открытый заказ</h3><h3>{order.title}</h3><p>{order.budgetMin.toLocaleString('ru-RU')} – {order.budgetMax.toLocaleString('ru-RU')} ₸ · До {dateLabel(order.deadline)}</p><Link className="button align-start" href={`/orders/${order.id}`}>Посмотреть заказ</Link></article>}</div><aside className="stack-lg"><div className="card stack"><h3>Контакты</h3><p>Телефон и email компании</p><Link className="button" href={state.signedIn?`/companies/${id}/contacts`:'/login'}>Показать контакты</Link><button className="button secondary" onClick={async()=>{try{await mutate(`/me/favorites/${id}`,state.favorites.includes(id)?'DELETE':'POST',undefined,()=>updateDemo(s=>({...s,favorites:s.favorites.includes(id)?s.favorites.filter(v=>v!==id):[...s.favorites,id]})));}catch(e){setError(e instanceof Error?e.message:'Ошибка сохранения.');}}}>{state.favorites.includes(id)?'В избранном':'Сохранить компанию'}</button><p className="caption muted">Контактные данные доступны после входа.</p></div><form className="card stack" onSubmit={note}><h3>Моя работа с компанией</h3>{noteFields}</form></aside></div></section>}
+import { useState } from 'react';
+import { companies } from '@/data/demo';
+import { useAppState, useStoreReady, updateDemo, DEMO } from '@/lib/state/store';
+import { contactFields } from '@/lib/api/form-fields';
+import { useResource, mutate, safeHref } from '@/lib/api/resources';
+import {
+  Field,
+  PageHeading,
+  InfoRow,
+  Select,
+  Textarea,
+  Notice,
+  ResourceState,
+  EmptyState,
+  dateLabel,
+} from '@/components/ui/primitives';
+import { statusLabels } from './company-card';
+export function CompanyPage({
+  id,
+  view = 'detail',
+}: {
+  id: string;
+  view?: 'detail' | 'contacts' | 'correction';
+}) {
+  const ready = useStoreReady();
+  const state = useAppState(),
+    resource = useResource(
+      `/companies/${encodeURIComponent(id)}`,
+      state.company.id === id ? state.company : companies.find((c) => c.id === id),
+    );
+  const [message, setMessage] = useState(''),
+    [error, setError] = useState(''),
+    [pending, setPending] = useState(false);
+  const c = resource.data;
+  const contact = state.contacts.find((x) => x.companyId === id);
+  const order = state.orders.find(
+    (o) => o.companyId === id && o.status === 'open' && o.visibility !== false,
+  );
+  async function note(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!state.signedIn) {
+      setError('Войдите, чтобы сохранить заметку.');
+      return;
+    }
+    const f = new FormData(e.currentTarget);
+    setPending(true);
+    setError('');
+    try {
+      const fields = contactFields(f, contact?.contactedAt);
+      const item = {
+        companyId: id,
+        status: fields.status,
+        note: fields.notes || '',
+        contactedAt: fields.contacted_at,
+        date: new Date().toISOString(),
+      };
+      await mutate(`/me/contacts/${id}`, 'PATCH', fields, () =>
+        updateDemo((s) => ({
+          ...s,
+          contacts: [...s.contacts.filter((x) => x.companyId !== id), item],
+        })),
+      );
+      setMessage(DEMO ? 'Заметка сохранена в этом браузере.' : 'Заметка сохранена.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка сохранения.');
+    } finally {
+      setPending(false);
+    }
+  }
+  const noteFields = (
+    <>
+      <Select
+        label={view === 'contacts' ? 'Статус взаимодействия' : 'Статус контакта'}
+        name="status"
+        defaultValue={contact?.status || 'Планирую написать'}
+      >
+        {['Планирую написать', 'Написал', 'Ответили', 'Договорились', 'Не актуально'].map((s) => (
+          <option key={s}>{s}</option>
+        ))}
+      </Select>
+      <Field
+        label="Дата контакта"
+        name="contacted_at"
+        type="date"
+        defaultValue={contact?.contactedAt?.slice(0, 10) || ''}
+      />
+      <Textarea
+        label={view === 'contacts' ? 'Моя заметка' : 'Заметка'}
+        name="note"
+        placeholder="Что предложить и о чём договорились"
+        defaultValue={contact?.note}
+      />
+      <button className="button" disabled={pending}>
+        Сохранить
+      </button>
+      {message && <Notice>{message}</Notice>}
+      {error && <Notice error>{error}</Notice>}
+    </>
+  );
+  if (!c)
+    return (
+      <section className="container page">
+        {resource.loading || resource.error ? (
+          <ResourceState error={resource.error} reload={resource.reload} />
+        ) : (
+          <EmptyState
+            title="Карточка недоступна"
+            description="Компания скрыта на время проверки или больше не опубликована."
+            href="/companies"
+            label="К каталогу"
+          />
+        )}
+      </section>
+    );
+  if (view === 'correction')
+    return (
+      <section className="container page">
+        <PageHeading
+          title="Сообщить об ошибке"
+          description={`${c.name} · Запрос будет рассмотрен модератором`}
+        />
+        <form
+          className="card stack"
+          style={{ maxWidth: 848 }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const value = String(new FormData(e.currentTarget).get('message')).trim();
+            if (!state.signedIn) {
+              setError('Войдите, чтобы отправить исправление.');
+              return;
+            }
+            setPending(true);
+            try {
+              await mutate(`/companies/${id}/corrections`, 'POST', { message: value }, () =>
+                updateDemo((s) => ({
+                  ...s,
+                  corrections: [
+                    ...s.corrections,
+                    {
+                      id: crypto.randomUUID(),
+                      companyId: id,
+                      requestedBy: s.profile.id,
+                      resolvedBy: null,
+                      resolvedAt: null,
+                      message: value,
+                      status: 'pending',
+                    },
+                  ],
+                })),
+              );
+              setMessage(
+                DEMO
+                  ? 'Обращение добавлено в демонстрационную очередь модерации.'
+                  : 'Запрос отправлен на проверку.',
+              );
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Ошибка отправки.');
+            } finally {
+              setPending(false);
+            }
+          }}
+        >
+          <Textarea
+            label="Что нужно исправить"
+            name="message"
+            required
+            minLength={10}
+            placeholder="Опишите ошибку и укажите актуальные данные. Добавьте ссылку на источник, если она есть."
+          />
+          <p className="muted">
+            Ваше обращение не меняет карточку сразу. После проверки модератор примет или отклонит
+            исправление.
+          </p>
+          <button className="button align-start" disabled={pending}>
+            Отправить на проверку
+          </button>
+          {message && <Notice>{message}</Notice>}
+          {error && <Notice error>{error}</Notice>}
+        </form>
+      </section>
+    );
+  if (view === 'contacts' && !state.signedIn)
+    return (
+      <section className="container page">
+        {!ready ? (
+          <div className="card" role="status">
+            Загрузка профиля…
+          </div>
+        ) : (
+          <EmptyState
+            title="Войдите, чтобы продолжить"
+            description="После входа здесь появятся контакты компании и ваши заметки."
+            href="/login"
+            label="Войти"
+          />
+        )}
+      </section>
+    );
+  if (view === 'contacts')
+    return (
+      <section className="container page">
+        <PageHeading
+          title={`Контакты ${c.name}`}
+          description="Данные из открытого источника · Уточняйте актуальность при обращении"
+        />
+        <div className="two-columns">
+          <form className="card stack" onSubmit={note}>
+            <h3>Связаться с компанией</h3>
+            <h2>{c.phone || 'Телефон не указан'}</h2>
+            <p>{c.email || 'Email не указан'}</p>
+            {DEMO && (
+              <p className="caption muted">Демонстрационные контактные данные для макета.</p>
+            )}
+            <hr />
+            {noteFields}
+          </form>
+          <aside className="card stack">
+            <h3>Первое обращение</h3>
+            <p className="small muted">
+              Представьтесь, кратко опишите пользу для бизнеса и приложите ссылку на портфолио.
+            </p>
+          </aside>
+        </div>
+      </section>
+    );
+  return (
+    <section className="container page">
+      <PageHeading
+        title={c.name}
+        description={
+          <>
+            <Link href="/companies">Компании</Link> / {c.category} / {c.name}
+          </>
+        }
+      />
+      <div className="two-columns">
+        <div className="stack-lg">
+          <article className="card stack">
+            <div>
+              <span className="badge amber">{statusLabels[c.websiteStatus]}</span>
+            </div>
+            <h2>{c.name}</h2>
+            <p>
+              {c.category || 'Без категории'} · {c.city}
+            </p>
+            <p className="muted">Перед предложением уточните актуальные потребности компании.</p>
+          </article>
+          <article className="card stack">
+            <h3>Информация о компании</h3>
+            {[
+              ['Город', c.city],
+              ['Адрес', c.address || 'Не указан'],
+              ['Сфера', c.category],
+              ['Проверка сайта', c.checkedAt ? dateLabel(c.checkedAt) : 'Не проводилась'],
+            ].map(([label, value]) => (
+              <InfoRow key={label} label={label} value={value} />
+            ))}
+            {safeHref(c.website || '') && (
+              <a
+                className="text-link"
+                href={safeHref(c.website || '')}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Сайт компании ↗
+              </a>
+            )}
+            {safeHref(c.sourceUrl || '') && (
+              <a
+                className="text-link"
+                href={safeHref(c.sourceUrl || '')}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Источник данных ↗
+              </a>
+            )}
+            <Link className="text-link small" href={`/companies/${id}/correction`}>
+              Сообщить об ошибке в карточке →
+            </Link>
+          </article>
+          {order && (
+            <article className="card stack">
+              <h3>Открытый заказ</h3>
+              <h3>{order.title}</h3>
+              <p>
+                {budgetLabel(order.budgetMin, order.budgetMax)} · {deadlineLabel(order.deadline)}
+              </p>
+              <Link className="button align-start" href={`/orders/${order.id}`}>
+                Посмотреть заказ
+              </Link>
+            </article>
+          )}
+        </div>
+        <aside className="stack-lg">
+          <div className="card stack">
+            <h3>Контакты</h3>
+            <p>Телефон и email компании</p>
+            <Link className="button" href={state.signedIn ? `/companies/${id}/contacts` : '/login'}>
+              Показать контакты
+            </Link>
+            <button
+              className="button secondary"
+              onClick={async () => {
+                if (!state.signedIn) {
+                  setError('Войдите, чтобы сохранить компанию.');
+                  return;
+                }
+                try {
+                  await mutate(
+                    `/me/favorites/${id}`,
+                    state.favorites.includes(id) ? 'DELETE' : 'POST',
+                    undefined,
+                    () =>
+                      updateDemo((s) => ({
+                        ...s,
+                        favorites: s.favorites.includes(id)
+                          ? s.favorites.filter((v) => v !== id)
+                          : [...s.favorites, id],
+                      })),
+                  );
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Ошибка сохранения.');
+                }
+              }}
+            >
+              {state.favorites.includes(id) ? 'В избранном' : 'Сохранить компанию'}
+            </button>
+            <p className="caption muted">Контактные данные доступны после входа.</p>
+          </div>
+          <form className="card stack" onSubmit={note}>
+            <h3>Моя работа с компанией</h3>
+            {noteFields}
+          </form>
+        </aside>
+      </div>
+    </section>
+  );
+}

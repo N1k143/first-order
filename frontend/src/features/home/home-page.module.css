@@ -1,18 +1,157 @@
-.hero { background: var(--soft); padding-block: 64px; }
-.heroGrid { display: grid; grid-template-columns: minmax(0,780fr) minmax(0,428fr); gap: 72px; }
-.heroContent { display: flex; flex-direction: column; gap: 24px; }
-.eyebrow { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--green); }
-.title { font-size: 56px; line-height: 62px; font-weight: 600; }
-.search { display: grid; grid-template-columns: minmax(0,1fr) 208px; gap: 12px; }
-.steps { background: var(--green); color: white; padding: 32px; border-radius: 8px; display: flex; flex-direction: column; gap: 24px; }
-.steps hr { width: 100%; border: 0; border-top: 1px solid var(--border); margin: 0; }
-.step { font-weight: 500; white-space: pre-wrap; }
-.content { padding-block: 80px; display: flex; flex-direction: column; gap: 32px; }
-.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.choiceButton { width: 220px; align-self: start; }
-.orders { display: grid; grid-template-columns: minmax(0,848fr) minmax(0,400fr); gap: 32px; align-items: start; }
-.business { background: var(--sand); }
-.businessButton { width: 240px; align-self: start; }
-@media (max-width: 1200px) { .heroGrid { gap: 32px; } .title { font-size: 48px; line-height: 56px; } .search { grid-template-columns: minmax(0,1fr); } }
-@media (max-width: 900px) { .heroGrid { grid-template-columns: 1fr; } .title { font-size: 44px; line-height: 52px; } .search { grid-template-columns: minmax(0,1fr) 208px; } .steps { display: none; } .orders { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .hero { padding-block: 32px; } .title { font-size: 36px; line-height: 42px; } .heroContent br { display: none; } .heroContent { gap: 20px; } .search, .choices { grid-template-columns: 1fr; } .content { padding-block: 40px; gap: 24px; } .sectionHint { display: none; } .choiceButton, .businessButton { width: 100%; } }
+.hero {
+  background: var(--soft);
+  padding-block: 64px;
+}
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 780fr) minmax(0, 428fr);
+  gap: 72px;
+}
+.heroContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.eyebrow {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--green);
+}
+.title {
+  font-size: 56px;
+  line-height: 62px;
+  font-weight: 600;
+}
+.search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 208px;
+  gap: 12px;
+}
+.steps {
+  background: var(--green);
+  color: white;
+  padding: 32px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.steps hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+.step {
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+.content {
+  padding-block: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.choiceButton {
+  width: 220px;
+  align-self: start;
+}
+.orders {
+  display: grid;
+  grid-template-columns: minmax(0, 848fr) minmax(0, 400fr);
+  gap: 32px;
+  align-items: start;
+}
+.business {
+  background: var(--sand);
+}
+.businessButton {
+  width: 240px;
+  align-self: start;
+}
+@media (max-width: 1200px) {
+  .heroGrid {
+    gap: 32px;
+  }
+  .title {
+    font-size: 48px;
+    line-height: 56px;
+  }
+  .search {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+  }
+  .title {
+    font-size: 44px;
+    line-height: 52px;
+  }
+  .search {
+    grid-template-columns: minmax(0, 1fr) 208px;
+  }
+  .steps {
+    display: none;
+  }
+  .orders {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .hero {
+    padding-block: 32px;
+  }
+  .title {
+    font-size: 36px;
+    line-height: 42px;
+  }
+  .heroContent br {
+    display: none;
+  }
+  .heroContent {
+    gap: 20px;
+  }
+  .search,
+  .choices {
+    grid-template-columns: 1fr;
+  }
+  .content {
+    padding-block: 40px;
+    gap: 24px;
+  }
+  .sectionHint {
+    display: none;
+  }
+  .choiceButton,
+  .businessButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .title {
+    font-size: 24px;
+    line-height: 32px;
+  }
+  .eyebrow,
+  .business,
+  .heroContent > p:last-child {
+    display: none;
+  }
+  .heroContent > p {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .heroContent,
+  .search {
+    gap: 24px;
+  }
+}

@@ -1,2 +1,5 @@
-import {OrderPage} from '@/features/orders/order-page';
-export default async function Page({params}:{params:Promise<{id:string}>}){const {id}=await params;return <OrderPage id={id} />}
+import { OrderPage } from '@/features/orders/order-page';
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <OrderPage id={id} />;
+}

@@ -1,2 +1,5 @@
-import {WorkspaceOrdersPage} from '@/features/workspace/orders-workspace';
-export default function Page(){return <WorkspaceOrdersPage/>;}
+import { WorkspacePage } from '@/features/workspace/workspace-page';
+
+export default function Page() {
+  return <WorkspacePage view="orders" />;
+}

@@ -1,2 +1,5 @@
-import {NewOrderPage} from '@/features/workspace/orders-workspace';
-export default function Page(){return <NewOrderPage/>;}
+import { OrderEditor } from '@/features/workspace/order-editor';
+
+export default function Page() {
+  return <OrderEditor />;
+}
