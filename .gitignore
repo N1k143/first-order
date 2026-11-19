@@ -8,3 +8,9 @@ __pycache__/
 .env.*
 !.env.example
 *.log
+
+# Presentation materials, superseded SQL scripts and generated design bundles.
+/*.pptx
+/create_*_presentation.py
+/week8_*.sql
+/frontend/tools/firstorder-figma-export.zip
