@@ -1,17 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { OrderCard } from '@/features/orders/order-card';
-import { useAppState } from '@/lib/state/store';
-import { useResource } from '@/lib/api/resources';
-import { ResourceState } from '@/components/ui/primitives';
+import { useLatestOrder } from './use-latest-order';
 import styles from './home-page.module.css';
 export function HomePage() {
-  const state = useAppState();
-  const orders = useResource(
-    '/orders?status=open',
-    state.orders.filter((o) => o.status === 'open' && o.visibility !== false),
-  );
-  const featuredOrder = orders.data?.[0];
+  const featuredOrder = useLatestOrder();
   return (
     <>
       <section className={styles.hero}>
@@ -84,17 +77,13 @@ export function HomePage() {
             </Link>
           </article>
         </div>
-        <div className={styles.orders}>
-          <div className="stack">
-            <h2>Свежие заказы</h2>
-            {featuredOrder ? (
+        <div className={`${styles.orders} ${!featuredOrder ? styles.withoutOrder : ''}`}>
+          {featuredOrder && (
+            <div className="stack" data-testid="latest-order">
+              <h2>Свежий заказ</h2>
               <OrderCard order={featuredOrder} />
-            ) : orders.loading || orders.error ? (
-              <ResourceState error={orders.error} reload={orders.reload} />
-            ) : (
-              <p className="muted">Открытых заказов пока нет.</p>
-            )}
-          </div>
+            </div>
+          )}
           <aside className={`card stack ${styles.business}`}>
             <h3>Вы представляете бизнес?</h3>
             <p className="small muted">

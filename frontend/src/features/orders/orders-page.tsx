@@ -3,6 +3,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/state/store';
 import { useResource } from '@/lib/api/resources';
 import { PageHeading, Select, Field, ResourceState, EmptyState } from '@/components/ui/primitives';
+import { isPublicOrder } from '@/lib/orders';
 import { OrderCard } from './order-card';
 import styles from '@/features/catalog/catalog.module.css';
 export function OrdersPage() {
@@ -16,8 +17,7 @@ export function OrdersPage() {
   }
   const rows = state.orders.filter(
     (o) =>
-      o.status !== 'draft' &&
-      o.visibility !== false &&
+      isPublicOrder(o) &&
       (!p.get('q') ||
         `${o.title} ${o.description}`.toLowerCase().includes(p.get('q')!.toLowerCase())) &&
       (!p.get('city') || p.get('city') === o.city) &&
@@ -28,6 +28,7 @@ export function OrdersPage() {
       (!p.get('status') || o.status === p.get('status')),
   );
   const resource = useResource('/orders?' + p.toString(), rows);
+  const visibleOrders = resource.data?.filter(isPublicOrder);
   const filters = (
     <form
       key={p.toString()}
@@ -98,7 +99,7 @@ export function OrdersPage() {
         />
         <button className="button">Найти</button>
       </form>
-      <details className="mobile-only" style={{ marginBottom: 24 }}>
+      <details className={`mobile-only ${styles.filterToggle}`} style={{ marginBottom: 24 }}>
         <summary className="button secondary">Фильтры заказов</summary>
         {filters}
       </details>
@@ -107,9 +108,9 @@ export function OrdersPage() {
         <div className={styles.results}>
           {resource.data ? (
             <>
-              <p className="small muted">Найдено {resource.data.length} заказов</p>
-              {resource.data.length ? (
-                resource.data.map((o) => <OrderCard key={o.id} order={o} />)
+              <p className="small muted">Найдено {visibleOrders!.length} заказов</p>
+              {visibleOrders!.length ? (
+                visibleOrders!.map((o) => <OrderCard key={o.id} order={o} />)
               ) : (
                 <EmptyState
                   title="Заказы не найдены"

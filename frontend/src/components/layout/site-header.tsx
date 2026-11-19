@@ -76,7 +76,7 @@ export function SiteHeader() {
               </Link>
               <button
                 type="button"
-                className="text-button desktop-only"
+                className={`text-button ${styles.logout}`}
                 onClick={logout}
                 disabled={busy}
               >
