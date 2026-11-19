@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
-import { DEMO, refreshAppState, updateDemo, useAppState } from '@/lib/state/store';
+import { DEMO, refreshAppState, updateDemo, useAppState, useSessionError } from '@/lib/state/store';
 import styles from './site-shell.module.css';
 import { Avatar } from '@/components/ui/avatar';
 
 export function SiteHeader() {
   const state = useAppState();
+  const sessionError = useSessionError();
+  const [retrying, setRetrying] = useState(false);
   const path = usePathname();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -26,10 +28,20 @@ export function SiteHeader() {
       ? DEMO
         ? '/moderation'
         : '/companies'
-      : DEMO
-        ? '/dashboard'
-        : '/applications';
+      : '/dashboard';
   const post = state.signedIn ? '/workspace/orders/new' : '/register/company';
+  async function retrySession() {
+    if (retrying) return;
+    setRetrying(true);
+    setError('');
+    try {
+      await refreshAppState();
+    } catch {
+      setError('Не удалось проверить сессию. Попробуйте ещё раз.');
+    } finally {
+      setRetrying(false);
+    }
+  }
   async function logout() {
     setBusy(true);
     setError('');
@@ -58,18 +70,20 @@ export function SiteHeader() {
           <Link href="/#how-it-works">Как это работает</Link>
         </nav>
         <div className={styles.actions}>
-          {(!accountPage || !state.signedIn) && (
+          {!sessionError && (!accountPage || !state.signedIn) && (
             <Link href={post} className={`button secondary ${styles.post}`}>
               Разместить заказ
             </Link>
           )}
-          <Link
-            className={`${styles.accountLink} ${state.signedIn && accountPage ? 'button quiet' : ''}`}
-            href={state.signedIn ? dashboard : '/login'}
-          >
-            {state.signedIn ? 'Мой кабинет' : 'Войти'}
-          </Link>
-          {state.signedIn && (
+          {!sessionError && (
+            <Link
+              className={`${styles.accountLink} ${state.signedIn && accountPage ? 'button quiet' : ''}`}
+              href={state.signedIn ? dashboard : '/login'}
+            >
+              {state.signedIn ? 'Мой кабинет' : 'Войти'}
+            </Link>
+          )}
+          {!sessionError && state.signedIn && (
             <>
               <Link className={styles.avatarLink} href="/profile" aria-label="Мой профиль">
                 <Avatar name={state.profile.name} src={state.profile.avatarUrl} />
@@ -89,10 +103,12 @@ export function SiteHeader() {
             <nav className={styles.mobileNav} aria-label="Мобильная навигация">
               <Link href="/companies">Компании</Link>
               <Link href="/orders">Заказы</Link>
-              <Link href={state.signedIn ? dashboard : '/login'}>
-                {state.signedIn ? 'Мой кабинет' : 'Войти'}
-              </Link>
-              {state.signedIn && (
+              {!sessionError && (
+                <Link href={state.signedIn ? dashboard : '/login'}>
+                  {state.signedIn ? 'Мой кабинет' : 'Войти'}
+                </Link>
+              )}
+              {!sessionError && state.signedIn && (
                 <>
                   <Link href="/profile">Мой профиль</Link>
                   {company ? (
@@ -122,12 +138,25 @@ export function SiteHeader() {
                   </button>
                 </>
               )}
-              <Link href={post}>Разместить заказ</Link>
-              {!state.signedIn && <Link href="/register">Создать аккаунт</Link>}
+              {!sessionError && <Link href={post}>Разместить заказ</Link>}
+              {!sessionError && !state.signedIn && <Link href="/register">Создать аккаунт</Link>}
             </nav>
           </details>
         </div>
       </div>
+      {sessionError && (
+        <div className="container button-row" role="alert">
+          <span>Не удалось проверить сессию. Действия аккаунта временно недоступны.</span>
+          <button
+            className="text-button"
+            type="button"
+            disabled={retrying}
+            onClick={() => void retrySession()}
+          >
+            {retrying ? 'Проверяем…' : 'Проверить сессию снова'}
+          </button>
+        </div>
+      )}
       {error && (
         <p className="container error-text" role="alert">
           {error}

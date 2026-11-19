@@ -4,7 +4,11 @@ import { apiRequest } from './client';
 import { DEMO, refreshAppState } from '@/lib/state/store';
 
 const invalidationListeners = new Set<() => void>();
-export function useResource<T>(path: string, demo: T) {
+export function useResource<T>(
+  path: string,
+  demo: T,
+  loader?: (path: string, signal: AbortSignal) => Promise<T>,
+) {
   const [remote, setRemote] = useState<{ path: string; data?: T; error?: string }>({ path: '' });
   const [version, setVersion] = useState(0);
   useEffect(() => {
@@ -17,7 +21,7 @@ export function useResource<T>(path: string, demo: T) {
   useEffect(() => {
     if (DEMO) return;
     const controller = new AbortController();
-    apiRequest<T>(path, { signal: controller.signal })
+    (loader ? loader(path, controller.signal) : apiRequest<T>(path, { signal: controller.signal }))
       .then((data) => {
         if (!controller.signal.aborted) setRemote({ path, data });
       })
@@ -29,7 +33,7 @@ export function useResource<T>(path: string, demo: T) {
           });
       });
     return () => controller.abort();
-  }, [path, version]);
+  }, [path, version, loader]);
   return {
     data: DEMO ? demo : remote.path === path ? remote.data : undefined,
     error: DEMO ? undefined : remote.path === path ? remote.error : undefined,

@@ -24,7 +24,7 @@ func (s *Server) registerProfiles(r chi.Router) {
 	r.MethodFunc("DELETE", "/companies/{company_id}/members/{user_id}", handle(s.deleteCompanyMember))
 }
 
-const publicProfileColumns = `user_id, name, bio, skills, github_url, role, created_at, updated_at`
+const publicProfileColumns = `user_id, name, avatar_url, bio, skills, github_url, role, created_at, updated_at`
 
 func (s *Server) getMe(w http.ResponseWriter, r *http.Request) error {
 	actor, err := s.requireActor(r)
@@ -50,6 +50,7 @@ type profilePatch struct {
 	Bio       *string `json:"bio"`
 	Skills    *string `json:"skills"`
 	GithubURL *string `json:"github_url"`
+	AvatarURL *string `json:"avatar_url"`
 }
 
 // profileStringObject preserves explicit null separately from omission while
@@ -80,11 +81,12 @@ func profileHas(present map[string]bool, key string, value *string) bool {
 	return present[key] || value != nil
 }
 func (p *profilePatch) UnmarshalJSON(data []byte) error {
-	values, present, err := profileStringObject(data, "name", "bio", "skills", "github_url")
+	values, present, err := profileStringObject(data, "name", "bio", "skills", "github_url", "avatar_url")
 	if err != nil {
 		return err
 	}
 	p.Name, p.Bio, p.Skills, p.GithubURL = values["name"], values["bio"], values["skills"], values["github_url"]
+	p.AvatarURL = values["avatar_url"]
 	p.present = present
 	return nil
 }
@@ -104,7 +106,7 @@ func profileText(field string, value *string, max int, required bool) error {
 }
 
 func (p *profilePatch) validate() error {
-	if len(p.present) == 0 && p.Name == nil && p.Bio == nil && p.Skills == nil && p.GithubURL == nil {
+	if len(p.present) == 0 && p.Name == nil && p.Bio == nil && p.Skills == nil && p.GithubURL == nil && p.AvatarURL == nil {
 		return invalid("body", "Укажите хотя бы одно изменяемое поле")
 	}
 	if profileHas(p.present, "name", p.Name) && p.Name == nil {
@@ -123,9 +125,11 @@ func (p *profilePatch) validate() error {
 		return err
 	}
 	if p.GithubURL != nil {
-		return validateURL("github_url", *p.GithubURL)
+		if err := validateURL("github_url", *p.GithubURL); err != nil {
+			return err
+		}
 	}
-	return nil
+	return validateAvatar(p.AvatarURL)
 }
 
 func (s *Server) patchMyProfile(w http.ResponseWriter, r *http.Request) error {
@@ -149,7 +153,7 @@ func (s *Server) patchMyProfile(w http.ResponseWriter, r *http.Request) error {
 	if err = tx.QueryRow(r.Context(), `SELECT user_id::text FROM profiles.profiles WHERE user_id=$1 FOR UPDATE`, actor.ID).Scan(&id); err != nil {
 		return err
 	}
-	item, err := changeJSON(r.Context(), tx, `UPDATE profiles.profiles SET name=CASE WHEN $6::boolean THEN $2::text ELSE name END,bio=CASE WHEN $7::boolean THEN $3::text ELSE bio END,skills=CASE WHEN $8::boolean THEN $4::text ELSE skills END,github_url=CASE WHEN $9::boolean THEN $5::text ELSE github_url END,updated_at=now() WHERE user_id=$1 RETURNING `+publicProfileColumns, actor.ID, body.Name, body.Bio, body.Skills, body.GithubURL, profileHas(body.present, "name", body.Name), profileHas(body.present, "bio", body.Bio), profileHas(body.present, "skills", body.Skills), profileHas(body.present, "github_url", body.GithubURL))
+	item, err := changeJSON(r.Context(), tx, `UPDATE profiles.profiles SET name=CASE WHEN $6::boolean THEN $2::text ELSE name END,bio=CASE WHEN $7::boolean THEN $3::text ELSE bio END,skills=CASE WHEN $8::boolean THEN $4::text ELSE skills END,github_url=CASE WHEN $9::boolean THEN $5::text ELSE github_url END,avatar_url=CASE WHEN $11::boolean THEN $10::text ELSE avatar_url END,updated_at=now() WHERE user_id=$1 RETURNING `+publicProfileColumns, actor.ID, body.Name, body.Bio, body.Skills, body.GithubURL, profileHas(body.present, "name", body.Name), profileHas(body.present, "bio", body.Bio), profileHas(body.present, "skills", body.Skills), profileHas(body.present, "github_url", body.GithubURL), body.AvatarURL, profileHas(body.present, "avatar_url", body.AvatarURL))
 	if err != nil {
 		return err
 	}

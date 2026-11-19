@@ -24,27 +24,85 @@ SMTP Gmail подключён с паролем приложения: прове
 
 Очистка финального прогона завершена по точным UUID и метке с проверкой зависимостей: удалены 2 аккаунта Auth, 2 профиля, 1 компания, 1 membership, 1 заказ и 1 отклик. Повторная проверка показала 0 оставшихся тестовых записей. Отчёт сохранён в `.deploy/email-e2e-cleanup.json`; тестовые пароли удалены. После очистки `/health`, `/ready` с bearer-токеном и `/api/v1/companies` вернули `200`.
 
-## Следующие обновления
+## Обновление профиля, настроек и кабинета компании
 
-Из корня репозитория после изменения кода:
+Этот раздел описывает подготовленную процедуру; сам по себе он не подтверждает её выполнение на рабочем сайте. Сначала завершите проверки и опубликуйте проверенный commit в `main`. Рабочая копия сборки и `/data/services/ingeneriya` должны содержать этот commit. Скрипты PM2 запускают API через `deploy/run-api.sh` (он читает закрытый `backend/.env`) и Next.js из рабочего `frontend/.next`; отдельного контейнера приложения в текущей схеме нет.
+
+Готовьте сборки в отдельной копии: сборка поверх `.next` работающего frontend может нарушить выдачу страниц и ресурсов. Команды ниже рассчитаны на одну shell-сессию и существующие процессы PM2.
 
 ```sh
-cd backend
-go test ./...
-go build -o bin/api.next ./cmd/api
-mv bin/api.next bin/api
-cd ../frontend
-npm run typecheck
-npm run lint
-npm run build
-cd ..
-pm2 restart ingeneriya-catalog
-pm2 restart ingeneriya-frontend
-pm2 save
+set -euo pipefail
+umask 077
+release_source=/home/server/.codex/worktrees/merge-main/ingeneriya
+live_root=/data/services/ingeneriya
+release_stamp=$(date -u +%Y%m%d-%H%M%S)
+release_stage="$live_root/.deploy/sections-$release_stamp"
+release_backup="$live_root/.deploy/backup-sections-$release_stamp"
+git -C "$live_root" pull --ff-only origin main
+test "$(git -C "$release_source" rev-parse HEAD)" = "$(git -C "$live_root" rev-parse HEAD)"
+mkdir -p "$release_stage" "$release_backup"
+(
+  cd "$release_source/backend"
+  GOCACHE=/tmp/firstorder-go-cache /data/go/bin/go build -trimpath -o "$release_stage/api" ./cmd/api
+)
+(
+  cd "$release_source/frontend"
+  npm ci
+  NEXT_PUBLIC_DATA_MODE=api BACKEND_URL=http://127.0.0.1:18082 npm run build
+)
+cp -a "$release_source/frontend/.next" "$release_stage/next"
+cp -an "$live_root/frontend/.next/static/." "$release_stage/next/static/"
+cp -p "$live_root/backend/bin/api" "$release_backup/api.before"
+docker exec ingeneriya-supabase-db pg_dump -U supabase_admin -d postgres -Fc > "$release_backup/postgres.dump"
+test -s "$release_backup/postgres.dump"
+docker exec -i ingeneriya-supabase-db pg_restore --list < "$release_backup/postgres.dump" > "$release_backup/dump-contents.txt"
 ```
 
-Миграции выполняются отдельно с административным DSN. Не заменяйте runtime DSN административным. При первоначальном создании процессов используйте `pm2 start deploy/ecosystem.config.cjs`; при смене `script` существующего приложения PM2 может сохранить прежний путь, поэтому сверяйте фактический `pm_exec_path`.
+Миграция `003_profile_avatar.sql` добавляет только nullable `profiles.profiles.avatar_url text`. Если столбец уже существует, данные не меняются. Ниже её SQL и запись журнала выполняются в одной транзакции с тем же advisory lock, что использует мигратор. Проверяются ранее применённые `001`/`002`; пароли и административный DSN не передаются в командную строку.
 
-Проверка без секретов: `curl https://e1.iq-home.kz/health` и `curl https://e1.iq-home.kz/api/v1/companies`. `/ready` требует отдельный bearer-токен из закрытой конфигурации. Для API E2E предусмотрен явный User-Agent `FirstOrder-E2E/1.0`: Cloudflare отклоняет стандартный Python User-Agent.
+```sh
+docker exec -i ingeneriya-supabase-db psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+SELECT pg_advisory_xact_lock(1730191919);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.firstorder_schema_migrations WHERE name='001_initial.sql')
+     OR NOT EXISTS (SELECT 1 FROM public.firstorder_schema_migrations WHERE name='002_runtime_integrity.sql') THEN
+    RAISE EXCEPTION 'Apply and verify migrations 001 and 002 first';
+  END IF;
+END $$;
+ALTER TABLE profiles.profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+INSERT INTO public.firstorder_schema_migrations(name)
+VALUES ('003_profile_avatar.sql') ON CONFLICT (name) DO NOTHING;
+COMMIT;
+SELECT name FROM public.firstorder_schema_migrations ORDER BY name;
+SELECT column_name,data_type,is_nullable FROM information_schema.columns
+WHERE table_schema='profiles' AND table_name='profiles' AND column_name='avatar_url';
+SQL
+```
 
-Резервная копия БД не является автоматическим откатом: восстановление после появления пользовательских данных требует отдельного решения. Предыдущий бинарник и настройки сохранены вместе с копией.
+Обычный `backend/cmd/migrate` также поддерживает `003`: он использует административный `DATABASE_URL`, сортирует SQL-файлы и пропускает имена из журнала. Его SQL и запись журнала коммитятся отдельно, поэтому повтор после сбоя между ними должен оставаться идемпотентным; `003` этому условию соответствует. Не меняйте runtime DSN ради миграции.
+
+После успешной миграции переключите готовую сборку. На этом шаге frontend кратковременно недоступен; в процессе сборки он продолжал работать.
+
+```sh
+pm2 stop ingeneriya-frontend
+(
+  cd "$live_root/frontend"
+  npm ci
+)
+mv "$live_root/frontend/.next" "$release_backup/frontend.next.before"
+mv "$release_stage/next" "$live_root/frontend/.next"
+cp "$release_stage/api" "$live_root/backend/bin/api.next"
+mv "$live_root/backend/bin/api.next" "$live_root/backend/bin/api"
+pm2 restart ingeneriya-catalog
+curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 http://127.0.0.1:18082/health
+curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 'http://127.0.0.1:18082/api/v1/companies?limit=1' > /dev/null
+pm2 restart ingeneriya-frontend
+pm2 save
+curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 https://e1.iq-home.kz/health
+curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 https://e1.iq-home.kz/api/categories > /dev/null
+```
+
+При ошибке переключения остановите frontend, восстановите `api.before` и `frontend.next.before`, верните зависимости соответствующего commit и перезапустите процессы. Добавленный nullable-столбец совместим с предыдущим backend; удалять его при откате приложения не нужно. Рабочую БД из backup автоматически не восстанавливайте. Проверка новых разделов до публикации использует отдельную PostgreSQL и контролируемые Auth/API-ответы; реальные смены email/пароля и отправка писем не являются частью этих команд.

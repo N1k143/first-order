@@ -275,6 +275,8 @@ func (s *Server) registerAuth(r chi.Router) {
 	r.Post("/auth/session", handle(s.authSession))
 	r.Post("/auth/forgot-password", handle(s.authForgot))
 	r.Post("/auth/reset-password", handle(s.authReset))
+	r.Post("/auth/change-email", handle(s.authChangeEmail))
+	r.Patch("/auth/change-email", handle(s.authChangeEmail))
 	r.Post("/auth/resend-verification", handle(s.authResend))
 	r.Post("/auth/verify", handle(s.authVerify))
 }
@@ -505,6 +507,65 @@ func (s *Server) authReset(w http.ResponseWriter, r *http.Request) error {
 	}
 	return respond(w, 200, map[string]string{"status": "updated"})
 }
+
+// authChangeEmail delegates ownership and confirmation to the current Auth
+// session. It never updates auth.users directly or accepts a target user ID.
+func (s *Server) authChangeEmail(w http.ResponseWriter, r *http.Request) error {
+	token := ""
+	if c, err := r.Cookie(accessCookie); err == nil {
+		token = c.Value
+	}
+	if h := r.Header.Get("Authorization"); h != "" {
+		if !strings.HasPrefix(h, "Bearer ") {
+			return problem(401, "INVALID_TOKEN", "Войдите в аккаунт")
+		}
+		token = strings.TrimPrefix(h, "Bearer ")
+	}
+	who, err := s.verifyToken(r.Context(), token)
+	if err != nil {
+		return err
+	}
+	if info := requestInfo(r); info != nil {
+		info.userID = who.ID
+	}
+	var in struct {
+		Email string `json:"email"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		return err
+	}
+	in.Email = strings.TrimSpace(in.Email)
+	if !emailValid(in.Email) {
+		return invalid("email", "Укажите корректный email")
+	}
+	path := "/user"
+	if s.Config.AuthRedirectURL != "" {
+		path += "?redirect_to=" + url.QueryEscape(s.Config.AuthRedirectURL)
+	}
+	data, status, err := s.authCall(r.Context(), "PUT", path, map[string]string{"email": in.Email}, token)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return authUpstreamError(status, false)
+	}
+	var user struct {
+		ID       string `json:"id"`
+		Email    string `json:"email"`
+		NewEmail string `json:"new_email"`
+	}
+	if json.Unmarshal(data, &user) != nil || user.ID != who.ID {
+		return problem(503, "AUTH_UNAVAILABLE", "Некорректный ответ Auth")
+	}
+	if strings.EqualFold(user.NewEmail, in.Email) {
+		return respond(w, http.StatusAccepted, map[string]string{"status": "confirmation_required", "email": in.Email})
+	}
+	if strings.EqualFold(user.Email, in.Email) {
+		return respond(w, http.StatusOK, map[string]string{"status": "updated", "email": user.Email})
+	}
+	return problem(503, "AUTH_UNAVAILABLE", "Auth не подтвердил запрос смены email")
+}
+
 func (s *Server) authResend(w http.ResponseWriter, r *http.Request) error {
 	var in authForm
 	if e := readJSON(r, &in); e != nil {
@@ -542,6 +603,18 @@ func (s *Server) authVerify(w http.ResponseWriter, r *http.Request) error {
 	}
 	var t authTokens
 	if json.Unmarshal(data, &t) != nil {
+		return problem(503, "AUTH_UNAVAILABLE", "Некорректный ответ Auth")
+	}
+	// Secure email change returns a successful non-session response after
+	// the first confirmation. Never create cookies or claim completion yet.
+	if in.Type == "email_change" && t.AccessToken == "" {
+		var pending struct {
+			Message string `json:"msg"`
+			Code    string `json:"code"`
+		}
+		if json.Unmarshal(data, &pending) == nil && pending.Code == "200" && pending.Message == "Confirmation link accepted. Please proceed to confirm link sent to the other email" {
+			return respond(w, http.StatusAccepted, map[string]string{"status": "second_confirmation_required"})
+		}
 		return problem(503, "AUTH_UNAVAILABLE", "Некорректный ответ Auth")
 	}
 	if _, e = s.acceptSession(w, r, t); e != nil {

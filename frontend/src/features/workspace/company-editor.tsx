@@ -1,37 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import { categories } from '@/data/demo';
-import { useResource } from '@/lib/api/resources';
+import Link from 'next/link';
+import { mutate, useResource } from '@/lib/api/resources';
+import { useCategories } from '@/lib/api/categories';
 import { companyFields } from '@/lib/api/form-fields';
-import { useAppState, updateDemo } from '@/lib/state/store';
-import { Field, Select, Notice, ResourceState } from '@/components/ui/primitives';
+import { DEMO, useAppState, updateDemo } from '@/lib/state/store';
+import { Field, Select, Notice, ResourceState, EmptyState } from '@/components/ui/primitives';
+import type { Company } from '@/types/domain';
 
-export function CompanyEditor() {
-  const state = useAppState();
-  const directory = useResource('/categories', categories);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  if (!directory.data) return <ResourceState error={directory.error} reload={directory.reload} />;
-  return (
-    <form
-      className="card stack"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const fields = companyFields(new FormData(event.currentTarget));
-        if (!fields.name || !fields.city) {
-          setError('Укажите название компании и город.');
-          return;
-        }
-        const category = directory.data?.find((item) => item.id === fields.category_id);
-        if (fields.category_id && !category) {
-          setError('Выберите категорию из справочника.');
-          return;
-        }
-        updateDemo((s) => ({
-          ...s,
+function CompanyForm({ company }: { company: Company }) {
+  const directory = useCategories();
+  const [message, setMessage] = useState(''),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setMessage('');
+    setError('');
+    const fields = companyFields(new FormData(event.currentTarget));
+    if (!fields.name || !fields.city) {
+      setError('Укажите название компании и город.');
+      return;
+    }
+    const category = directory.data?.find((item) => item.id === fields.category_id);
+    if (fields.category_id && !category) {
+      setError('Выберите категорию из справочника.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await mutate(`/companies/${encodeURIComponent(company.id)}`, 'PATCH', fields, () =>
+        updateDemo((state) => ({
+          ...state,
           company: {
-            ...s.company,
+            ...state.company,
             name: fields.name,
             city: fields.city,
             categoryId: fields.category_id,
@@ -48,30 +52,35 @@ export function CompanyEditor() {
               .join('')
               .toUpperCase(),
           },
-          orders: s.orders.map((order) =>
-            order.companyId === s.company.id
+          orders: state.orders.map((order) =>
+            order.companyId === company.id
               ? { ...order, companyName: fields.name, city: fields.city }
               : order,
           ),
-        }));
-        setError('');
-        setMessage('Данные компании сохранены в этом браузере.');
-      }}
-    >
+        })),
+      );
+      setMessage(
+        DEMO ? 'Данные компании сохранены в этом браузере.' : 'Данные компании сохранены.',
+      );
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Не удалось сохранить компанию.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!directory.data) return <ResourceState error={directory.error} reload={directory.reload} />;
+  return (
+    <form className="card stack" onSubmit={save}>
       <h3>О компании</h3>
       <Field
         label="Название компании"
         name="name"
-        defaultValue={state.company.name}
+        defaultValue={company.name}
         required
-        maxLength={120}
+        maxLength={240}
       />
-      <Field label="Город" name="city" defaultValue={state.company.city} required maxLength={100} />
-      <Select
-        label="Сфера деятельности"
-        name="category_id"
-        defaultValue={state.company.categoryId || ''}
-      >
+      <Field label="Город" name="city" defaultValue={company.city} required maxLength={240} />
+      <Select label="Сфера деятельности" name="category_id" defaultValue={company.categoryId || ''}>
         <option value="">Без категории</option>
         {directory.data.map((category) => (
           <option key={category.id} value={category.id}>
@@ -82,24 +91,24 @@ export function CompanyEditor() {
       <Field
         label="Адрес компании"
         name="address"
-        defaultValue={state.company.address}
-        maxLength={300}
+        defaultValue={company.address || ''}
+        maxLength={4000}
       />
       <div className="form-grid">
         <Field
           label="Email для связи"
           type="email"
           name="email"
-          defaultValue={state.company.email}
+          defaultValue={company.email || ''}
         />
-        <Field label="Телефон" type="tel" name="phone" defaultValue={state.company.phone} />
+        <Field label="Телефон" type="tel" name="phone" defaultValue={company.phone || ''} />
       </div>
       <Field
         label="Сайт компании"
         type="url"
         pattern="https?://.*"
         name="website"
-        defaultValue={state.company.website}
+        defaultValue={company.website || ''}
         placeholder="https://example.com"
       />
       <Field
@@ -107,13 +116,43 @@ export function CompanyEditor() {
         type="url"
         pattern="https?://.*"
         name="source_url"
-        defaultValue={state.company.sourceUrl || ''}
+        defaultValue={company.sourceUrl || ''}
         placeholder="https://example.com/company"
       />
       <p className="small muted">Статус проверки сайта и публикации меняется после модерации.</p>
-      <button className="button align-start">Сохранить изменения</button>
+      <div className="button-row">
+        <button className="button align-start" disabled={busy}>
+          {busy ? 'Сохраняем…' : 'Сохранить изменения'}
+        </button>
+        <Link className="button secondary" href={`/companies/${company.id}`}>
+          Открыть карточку компании
+        </Link>
+      </div>
       {error && <Notice error>{error}</Notice>}
       {message && <Notice>{message}</Notice>}
     </form>
+  );
+}
+function ApiCompanyEditor({ companyId }: { companyId: string }) {
+  const company = useResource<Company | undefined>(
+    `/companies/${encodeURIComponent(companyId)}`,
+    undefined,
+  );
+  return company.data ? (
+    <CompanyForm key={companyId} company={company.data} />
+  ) : (
+    <ResourceState error={company.error} reload={company.reload} />
+  );
+}
+export function CompanyEditor({ companyId }: { companyId?: string }) {
+  const state = useAppState();
+  if (DEMO) return <CompanyForm company={state.company} />;
+  return companyId ? (
+    <ApiCompanyEditor companyId={companyId} />
+  ) : (
+    <EmptyState
+      title="Выберите компанию"
+      description="Редактирование доступно участникам компании."
+    />
   );
 }

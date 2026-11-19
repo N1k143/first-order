@@ -383,7 +383,8 @@ export function AuthPage({ view, entryRole }: { view: View; entryRole?: AuthRole
 export function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState('');
-  const task = useRef<Promise<string> | null>(null);
+  const [pendingEmail, setPendingEmail] = useState(false);
+  const task = useRef<Promise<string | null> | null>(null);
   useEffect(() => {
     let active = true;
     if (!task.current) {
@@ -394,12 +395,17 @@ export function AuthCallbackPage() {
       const tokenHash = query.get('token_hash') || fragment.get('token_hash');
       const type = query.get('type') || fragment.get('type') || 'email';
       const invalidLink = query.has('error') || fragment.has('error');
+      const pendingMessage =
+        !invalidLink &&
+        (fragment.has('message') || query.has('message')) &&
+        (fragment.has('sb') || query.has('sb') || type === 'email_change');
       window.history.replaceState(window.history.state, '', window.location.pathname);
       task.current = (async () => {
         if (DEMO)
           throw new Error('Подтверждение по email доступно при подключении приложения к серверу.');
         if (invalidLink)
           throw new Error('Ссылка недействительна или истекла. Запросите новое письмо.');
+        if (pendingMessage && !accessToken && !tokenHash) return null;
         if (accessToken) {
           await apiRequest('/auth/session', {
             method: 'POST',
@@ -410,20 +416,26 @@ export function AuthCallbackPage() {
             },
           });
         } else if (tokenHash) {
-          await apiRequest('/auth/verify', {
+          const result = await apiRequest<{ status?: string }>('/auth/verify', {
             method: 'POST',
             body: { token_hash: tokenHash, type },
           });
+          if (result?.status === 'second_confirmation_required') return null;
         } else throw new Error('В ссылке отсутствует подтверждение. Откройте актуальное письмо.');
         const session = await refreshAppState();
         if (!session.signedIn) throw new Error('Не удалось загрузить аккаунт. Повторите вход.');
-        return type === 'recovery' ? '/reset-password' : accountHome(session);
+        return type === 'recovery'
+          ? '/reset-password'
+          : type === 'email_change'
+            ? '/settings'
+            : accountHome(session);
       })();
     }
     // Reuse the exchange promise when development StrictMode replays this effect.
     task.current
       .then((destination) => {
-        if (active) router.replace(destination);
+        if (active && destination) router.replace(destination);
+        else if (active) setPendingEmail(true);
       })
       .catch((e) => {
         if (active) setError(e instanceof Error ? e.message : 'Не удалось подтвердить аккаунт.');
@@ -436,9 +448,26 @@ export function AuthCallbackPage() {
     <section className="container page">
       <PageHeading
         title="Подтверждение аккаунта"
-        description={error ? 'Откройте новое письмо или войдите в аккаунт.' : 'Завершаем вход…'}
+        description={
+          error
+            ? 'Откройте новое письмо или войдите в аккаунт.'
+            : pendingEmail
+              ? 'Остался ещё один шаг для смены email.'
+              : 'Завершаем вход…'
+        }
       />
-      {error ? (
+      {pendingEmail ? (
+        <div className="card stack auth-card" role="status">
+          <h2>Подтвердите второй адрес</h2>
+          <p>
+            Откройте ссылку во втором письме: для смены email нужно подтвердить старый и новый
+            адрес.
+          </p>
+          <Link className="button secondary" href="/settings">
+            В настройки
+          </Link>
+        </div>
+      ) : error ? (
         <div className="card stack auth-card">
           <Notice error>{error}</Notice>
           <Link className="button" href="/login">

@@ -111,7 +111,7 @@ func (s *Server) compatibility(canonical http.Handler) http.Handler {
 			return
 		}
 		data = frontendValue(data)
-		if path == "/orders" || path == "/me/applications" || path == "/me/portfolio" || strings.HasSuffix(path, "/applications") || strings.HasSuffix(path, "/members") {
+		if path == "/categories" || path == "/orders" || path == "/me/applications" || path == "/me/portfolio" || strings.HasSuffix(path, "/applications") || strings.HasSuffix(path, "/members") {
 			if p, ok := data.(map[string]any); ok {
 				if items, exists := p["items"]; exists {
 					data = items

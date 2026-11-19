@@ -10,7 +10,8 @@ import { EmptyState, Notice, money } from '@/components/ui/primitives';
 import { AccountAccess } from '@/features/account/account-access';
 import { DEMO, useAppState, updateDemo } from '@/lib/state/store';
 import { orderLabels, selectContractor } from '@/lib/state/order-actions';
-import { ManageOrderPage, WorkspaceOrdersPage } from './orders-workspace';
+import { ManageOrderPage } from './orders-workspace';
+import { ApiWorkspacePage } from './api-workspace';
 
 function DemoWorkspacePage({
   view = 'overview',
@@ -295,12 +296,10 @@ export function WorkspacePage(props: {
   id?: string;
 }) {
   if (!DEMO) {
-    if (props.view === 'order' || (props.view === 'applications' && props.id)) {
-      return props.id ? <ManageOrderPage id={props.id} /> : <WorkspaceOrdersPage />;
+    if ((props.view === 'order' || props.view === 'applications') && props.id) {
+      return <ManageOrderPage id={props.id} />;
     }
-    if (!props.view || ['overview', 'orders', 'applications'].includes(props.view)) {
-      return <WorkspaceOrdersPage applicationsOnly={props.view === 'applications'} />;
-    }
+    return <ApiWorkspacePage view={props.view === 'order' ? 'orders' : props.view} />;
   }
   return <DemoWorkspacePage {...props} />;
 }

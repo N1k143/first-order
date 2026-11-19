@@ -19,7 +19,7 @@ export function ModerationPage({ view = 'queue' }: { view?: 'queue' | 'import' |
       }
       role="moderator"
     >
-      <AccountAccess>
+      <AccountAccess demoOnly>
         {state.profile.role !== 'moderator' ? (
           <div className="card stack">
             <h2>Демонстрация модерации</h2>
