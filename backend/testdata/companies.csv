@@ -1,0 +1,3 @@
+external_id,name,city,address,phone,email,website_url,website_status,source_url
+demo-coffee-001,Демонстрационная кофейня,Астана,Учебный адрес 1,,,,not_found,https://example.com/companies/demo-coffee-001
+demo-workshop-002,Демонстрационная мастерская,Алматы,Учебный адрес 2,,,,needs_review,https://example.com/companies/demo-workshop-002

@@ -1,18 +1,13 @@
+// Kept as a compatible entrypoint for the existing service unit.
 package main
 
 import (
+	"ingeneriya/backend/internal/app"
 	"log"
-	"net/http"
-	"github.com/go-chi/chi/v5"
 )
 
 func main() {
-
-	r := chi.NewRouter()
-
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})
-
-	log.Fatal(http.ListenAndServe("127.0.0.1:18080", r))
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -1,0 +1,5 @@
+bin
+.env
+.env.*
+*_test.go
+*.log
