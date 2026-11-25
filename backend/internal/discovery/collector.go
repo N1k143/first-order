@@ -167,3 +167,15 @@ func Select(snapshot Snapshot, limit int) []Candidate {
 	}
 	return result
 }
+
+// SelectUnseen advances the catalog without repeatedly selecting the first batch.
+// Reviewed/rejected source IDs are excluded as well, so decisions stay final.
+func SelectUnseen(snapshot Snapshot, limit int, known map[string]bool) []Candidate {
+	filtered := Snapshot{Remark: snapshot.Remark}
+	for _, element := range snapshot.Elements {
+		if !known[element.Type+"/"+strconv.FormatInt(element.ID, 10)] {
+			filtered.Elements = append(filtered.Elements, element)
+		}
+	}
+	return Select(filtered, limit)
+}

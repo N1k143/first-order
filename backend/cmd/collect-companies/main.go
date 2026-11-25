@@ -120,7 +120,7 @@ func run() error {
 				return e
 			}
 			// Rejected/approved decisions and already published cards survive repeat collection.
-			_, e = tx.Exec(ctx, `INSERT INTO importer.company_candidates(source,external_id,payload) VALUES($1,$2,$3) ON CONFLICT(source,external_id) DO UPDATE SET payload=EXCLUDED.payload,collected_at=now() WHERE importer.company_candidates.review_status='pending'`, candidate.Source, candidate.ExternalID, payload)
+			_, e = tx.Exec(ctx, `INSERT INTO importer.company_candidates(source,external_id,payload) VALUES($1,$2,$3) ON CONFLICT(source,external_id) DO UPDATE SET payload=EXCLUDED.payload,collected_at=now() WHERE importer.company_candidates.review_status='pending' AND importer.company_candidates.draft='{}'::jsonb`, candidate.Source, candidate.ExternalID, payload)
 			if e != nil {
 				return fmt.Errorf("cannot stage candidates; transaction rolled back")
 			}

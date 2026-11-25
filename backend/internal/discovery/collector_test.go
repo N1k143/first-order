@@ -113,3 +113,20 @@ func TestWebsiteChecksRequireEvidenceAndRespectRobots(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectUnseenAdvancesPastReviewedSources(t *testing.T) {
+	snapshot := Snapshot{Elements: []Element{
+		{Type: "node", ID: 1, Tags: map[string]string{"name": "Known", "shop": "bakery"}},
+		{Type: "node", ID: 2, Tags: map[string]string{"name": "New", "shop": "bakery"}},
+	}}
+	got := SelectUnseen(snapshot, 1, map[string]bool{"node/1": true})
+	if len(got) != 1 || got[0].ExternalID != "node/2" {
+		t.Fatalf("selected known source: %+v", got)
+	}
+	if len(snapshot.Elements) != 2 {
+		t.Fatal("input snapshot mutated")
+	}
+	if len(SelectUnseen(snapshot, 100, map[string]bool{"node/1": true, "node/2": true})) != 0 {
+		t.Fatal("exhausted source not empty")
+	}
+}

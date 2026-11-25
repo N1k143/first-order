@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"ingeneriya/backend/internal/discovery"
 	"log/slog"
 	"net"
 	"net/http"
@@ -31,11 +32,13 @@ type Config struct {
 	RateLimit       int
 }
 type Server struct {
-	DB         DB
-	Config     Config
-	logger     *slog.Logger
-	httpClient *http.Client
-	limiter    *rateLimiter
+	DB              DB
+	Config          Config
+	logger          *slog.Logger
+	httpClient      *http.Client
+	limiter         *rateLimiter
+	collectionFetch func(context.Context, int) ([]discovery.Candidate, error)
+	collectionCheck func(context.Context, discovery.Candidate) discovery.Candidate
 }
 
 func New(db DB, cfg Config) *Server {
@@ -53,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerOrders(canonical)
 	s.registerImports(canonical)
 	s.registerDiscovery(canonical)
+	s.registerCollection(canonical)
 	canonical.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, problem(404, "NOT_FOUND", "Маршрут не найден"))
 	})
@@ -168,7 +172,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			rec.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-			rec.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			rec.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
 			rec.Header().Set("Access-Control-Max-Age", "600")
 			rec.WriteHeader(204)
 			return

@@ -48,6 +48,8 @@ func Run() error {
 	server := api.New(pool, cfg)
 	workerDone := make(chan struct{})
 	go func() { defer close(workerDone); server.RunImports(ctx) }()
+	collectionDone := make(chan struct{})
+	go func() { defer close(collectionDone); server.RunCollection(ctx) }()
 	httpServer := &http.Server{Addr: cfg.Addr, Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	errch := make(chan error, 1)
 	go func() { slog.Info("api started", "addr", cfg.Addr); errch <- httpServer.ListenAndServe() }()
@@ -64,5 +66,6 @@ func Run() error {
 	err = httpServer.Shutdown(shutdown)
 	stop()
 	<-workerDone
+	<-collectionDone
 	return err
 }
