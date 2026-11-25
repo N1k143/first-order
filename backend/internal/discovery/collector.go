@@ -27,19 +27,21 @@ type Snapshot struct {
 	Remark   string    `json:"remark"`
 }
 type Candidate struct {
-	Source      string            `json:"source"`
-	ExternalID  string            `json:"external_id"`
-	Name        string            `json:"name"`
-	City        string            `json:"city"`
-	Category    string            `json:"category"`
-	Address     string            `json:"address"`
-	Phone       string            `json:"phone"`
-	Email       string            `json:"email"`
-	WebsiteURL  string            `json:"website_url"`
-	SourceURL   string            `json:"source_url"`
-	Attribution string            `json:"attribution"`
-	Tags        map[string]string `json:"tags"`
-	Check       WebsiteCheck      `json:"website_check"`
+	Source            string             `json:"source"`
+	ExternalID        string             `json:"external_id"`
+	Name              string             `json:"name"`
+	City              string             `json:"city"`
+	Category          string             `json:"category"`
+	Address           string             `json:"address"`
+	Phone             string             `json:"phone"`
+	Email             string             `json:"email"`
+	WebsiteURL        string             `json:"website_url"`
+	SourceURL         string             `json:"source_url"`
+	Attribution       string             `json:"attribution"`
+	Tags              map[string]string  `json:"tags"`
+	Check             WebsiteCheck       `json:"website_check"`
+	WebsiteCandidates []WebsiteCandidate `json:"website_candidates,omitempty"`
+	DiscoveryWarnings []string           `json:"discovery_warnings,omitempty"`
 }
 
 func Fetch(ctx context.Context, endpoint string) (Snapshot, error) {

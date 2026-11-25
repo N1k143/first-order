@@ -13,18 +13,30 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/temoto/robotstxt"
 )
 
 type WebsiteCheck struct {
-	Status          string    `json:"status"`
-	Reason          string    `json:"reason"`
-	CheckedAt       time.Time `json:"checked_at"`
-	FinalURL        string    `json:"final_url,omitempty"`
-	HTTPStatus      int       `json:"http_status,omitempty"`
-	Evidence        []string  `json:"evidence"`
-	SearchPerformed bool      `json:"search_performed"`
+	Status          string           `json:"status"`
+	Reason          string           `json:"reason"`
+	CheckedAt       time.Time        `json:"checked_at"`
+	FinalURL        string           `json:"final_url,omitempty"`
+	HTTPStatus      int              `json:"http_status,omitempty"`
+	Evidence        []string         `json:"evidence"`
+	SearchPerformed bool             `json:"search_performed"`
+	Attempts        []WebsiteAttempt `json:"attempts,omitempty"`
+	CandidateSource string           `json:"candidate_source,omitempty"`
+	CandidateScope  string           `json:"candidate_scope,omitempty"`
 }
-type Checker struct{ Client *http.Client }
+type Checker struct {
+	Client *http.Client
+	robots map[string]robotsPolicy
+}
+type robotsPolicy struct {
+	data    *robotstxt.RobotsData
+	allowed bool
+}
 
 func publicAddress(ip netip.Addr) bool {
 	ip = ip.Unmap()
@@ -122,16 +134,26 @@ func (c *Checker) get(ctx context.Context, target string) (*http.Response, error
 	return c.Client.Do(req)
 }
 
-// Conservative robots handling: any Disallow for this agent or * skips HTML inspection.
+// Evaluate rules for the requested path, not the mere presence of Disallow.
 // Unknown/failed robots checks never imply permission or absence of a website.
 func (c *Checker) robotsAllowed(ctx context.Context, u *url.URL) bool {
 	target := u.Scheme + "://" + u.Host + "/robots.txt"
+	if c.robots == nil {
+		c.robots = map[string]robotsPolicy{}
+	}
+	policy, exists := c.robots[target]
+	if exists {
+		return policy.permits(ctx, u)
+	}
+	// Cache failures too: one bounded run should not repeatedly hit an unavailable host.
+	c.robots[target] = robotsPolicy{}
 	response, err := c.get(ctx, target)
 	if err != nil {
 		return false
 	}
 	defer response.Body.Close()
 	if response.StatusCode == 404 || response.StatusCode == 410 {
+		c.robots[target] = robotsPolicy{allowed: true}
 		return true
 	}
 	if response.StatusCode != 200 {
@@ -141,27 +163,75 @@ func (c *Checker) robotsAllowed(ctx context.Context, u *url.URL) bool {
 	if err != nil || len(raw) > 65536 {
 		return false
 	}
-	active := false
-	for _, line := range strings.Split(string(raw), "\n") {
-		line = strings.SplitN(line, "#", 2)[0]
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		key = strings.ToLower(strings.TrimSpace(key))
-		value = strings.TrimSpace(value)
-		if key == "user-agent" {
-			if value == "*" || strings.Contains(strings.ToLower(value), "firstorder") {
-				active = true
-			} else if active {
-				return false
-			}
-		}
-		if active && key == "disallow" && value != "" {
+	if strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") && !strings.Contains(strings.ToLower(string(raw)), "user-agent:") && len(strings.TrimSpace(string(raw))) > 0 {
+		return false
+	}
+	data, err := robotstxt.FromBytes(raw)
+	if err != nil {
+		return false
+	}
+	policy = robotsPolicy{data: data}
+	c.robots[target] = policy
+	return policy.permits(ctx, u)
+}
+
+func (p robotsPolicy) permits(ctx context.Context, u *url.URL) bool {
+	if p.data == nil {
+		return p.allowed
+	}
+	group := p.data.FindGroup("FirstOrder-CompanyDiscovery")
+	path := u.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	if !group.Test(path) {
+		return false
+	}
+	// Long Crawl-delay requests are deferred to manual review for this bounded pilot.
+	if group.CrawlDelay > 10*time.Second {
+		return false
+	}
+	if group.CrawlDelay > 0 {
+		timer := time.NewTimer(group.CrawlDelay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
 			return false
+		case <-timer.C:
 		}
 	}
 	return true
+}
+
+func (c *Checker) getPage(ctx context.Context, target string) (*http.Response, error) {
+	client := *c.Client
+	original := client.CheckRedirect
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 4 {
+			return fmt.Errorf("redirect limit")
+		}
+		if _, err := validTarget(req.URL.String()); err != nil {
+			return err
+		}
+		if original != nil {
+			if err := original(req, via); err != nil {
+				return err
+			}
+		}
+		if !c.robotsAllowed(req.Context(), req.URL) {
+			return fmt.Errorf("redirect path disallowed")
+		}
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "FirstOrder-CompanyDiscovery/1.0 (+https://e1.iq-home.kz)")
+	return client.Do(req)
 }
 
 var scripts = regexp.MustCompile(`(?is)<(script|style)\b[^>]*>.*?</(?:script|style)>`)
@@ -190,7 +260,7 @@ func (c *Checker) Check(ctx context.Context, company Candidate) WebsiteCheck {
 		result.Reason = "robots_or_access_restriction"
 		return result
 	}
-	response, err := c.get(ctx, u.String())
+	response, err := c.getPage(ctx, u.String())
 	if err != nil {
 		result.Reason = "website_unreachable"
 		return result
@@ -238,6 +308,13 @@ func (c *Checker) Check(ctx context.Context, company Candidate) WebsiteCheck {
 	nameMatch := len([]rune(name)) >= 4 && strings.Contains(normalized, name)
 	address := normalize(company.Address)
 	addressMatch := len([]rune(address)) >= 6 && strings.Contains(normalized, address)
+	emailMatch := false
+	finalHost := strings.TrimPrefix(strings.ToLower(response.Request.URL.Hostname()), "www.")
+	for _, host := range corporateEmailDomains(company.Email) {
+		if finalHost == strings.TrimPrefix(host, "www.") {
+			emailMatch = true
+		}
+	}
 	if phoneMatch {
 		result.Evidence = append(result.Evidence, "phone_match")
 	}
@@ -247,8 +324,11 @@ func (c *Checker) Check(ctx context.Context, company Candidate) WebsiteCheck {
 	if addressMatch {
 		result.Evidence = append(result.Evidence, "address_match")
 	}
+	if emailMatch {
+		result.Evidence = append(result.Evidence, "email_domain_match")
+	}
 	result.Reason = "ownership_not_confirmed"
-	if phoneMatch || (nameMatch && addressMatch) {
+	if phoneMatch || (nameMatch && (addressMatch || emailMatch)) {
 		result.Status = "found"
 		result.Reason = "ownership_evidence_matched"
 	}

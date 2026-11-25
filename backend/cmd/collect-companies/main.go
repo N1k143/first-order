@@ -68,15 +68,16 @@ func run() error {
 	}
 	checker := discovery.NewChecker()
 	defer checker.Client.CloseIdleConnections()
-	search := discovery.NewSearcher(os.Getenv("BRAVE_SEARCH_API_KEY"))
-	defer search.Client.CloseIdleConnections()
+	wikidata := discovery.NewWikidata()
+	defer wikidata.Client.CloseIdleConnections()
 	counts := map[string]int{}
 	categories := map[string]int{}
 	for i := range candidates {
 		if err = ctx.Err(); err != nil {
 			return fmt.Errorf("collection canceled; nothing stored")
 		}
-		candidates[i].Check = checker.Discover(ctx, candidates[i], search)
+		discovery.Enrich(ctx, &candidates[i], wikidata)
+		candidates[i].Check = checker.Discover(ctx, candidates[i])
 		counts[candidates[i].Check.Status]++
 		categories[candidates[i].Category]++
 		fmt.Fprintf(os.Stderr, "checked %d/%d\n", i+1, len(candidates))

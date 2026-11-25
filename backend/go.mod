@@ -5,6 +5,7 @@ go 1.25.6
 require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/temoto/robotstxt v1.1.2
 	golang.org/x/image v0.44.0
 )
 
