@@ -72,14 +72,17 @@ DATABASE_URL="$ADMIN_DATABASE_URL" go run ./cmd/admin owner COMPANY_UUID USER_UU
 
 ## Контракт API
 
+Контракт кабинета модератора для фронтенда: [docs/moderation-api.md](docs/moderation-api.md). Реализованы сводка, очередь кандидатов с фильтрами, просмотр, черновые правки с ревизиями, совпадения, approve/reject/link, история кандидатов и контекст обращения. Для новых операций нужна миграция `005_moderation_workspace.sql`; исходные данные сборщика и ручной черновик хранятся отдельно.
+
 Основной API — `/api/v1`, поля в `snake_case`. JSON-списки: `{items,total,page,limit}`; `page` начинается с 1, `limit` по умолчанию 20, максимум 100. Ошибка: `{error:{code,message,details},request_id}`. `PATCH` различает отсутствующее поле и явный `null` для nullable-полей; служебные поля отвергаются.
 
 | Область | Операции | Где смотреть обработчики |
 | --- | ---: | --- |
 | Профиль, портфолио, участники компаний | 10 | [profiles.go](internal/api/profiles.go) |
-| Каталог, категории, избранное, контакты, исправления, модерация | 21 | [catalog.go](internal/api/catalog.go) |
+| Каталог, категории, избранное, контакты, исправления, модерация | 22 | [catalog.go](internal/api/catalog.go) |
 | Заказы, отклики, выбор исполнителя, видимость | 15 | [orders.go](internal/api/orders.go) |
 | Импорт | 3 | [importer.go](internal/api/importer.go) |
+| Кандидаты, сводка и журнал кабинета модератора | 7 | [discovery.go](internal/api/discovery.go), [moderation_candidates.go](internal/api/moderation_candidates.go), [moderation.go](internal/api/moderation.go) |
 | Auth | 10 | [auth.go](internal/api/auth.go) |
 | `/health`, `/ready` | 2 | [server.go](internal/api/server.go) |
 

@@ -35,6 +35,7 @@ func (s *Server) registerCatalog(r chi.Router) {
 	r.MethodFunc("POST", "/companies/{company_id}/correction-requests", handle(s.catalogCreateCorrection))
 	r.MethodFunc("GET", "/me/correction-requests", handle(s.catalogOwnCorrections))
 	r.MethodFunc("GET", "/moderation/correction-requests", handle(s.catalogModerationCorrections))
+	r.MethodFunc("GET", "/moderation/correction-requests/{request_id}", handle(s.catalogModerationCorrection))
 	r.MethodFunc("PATCH", "/moderation/correction-requests/{request_id}", handle(s.catalogResolveCorrection))
 	r.MethodFunc("GET", "/moderation/actions", handle(s.catalogModerationActions))
 }
@@ -710,6 +711,20 @@ func (s *Server) catalogModerationCorrections(w http.ResponseWriter, r *http.Req
 	}
 	return s.catalogCorrectionsPage(w, r, "")
 }
+func (s *Server) catalogModerationCorrection(w http.ResponseWriter, r *http.Request) error {
+	if _, err := s.requireRole(r, "moderator"); err != nil {
+		return err
+	}
+	id, err := pathID(r, "request_id")
+	if err != nil {
+		return err
+	}
+	item, err := oneJSON(r.Context(), s.DB, `SELECT cr.*,c.name AS company_name,p.name AS requested_by_name,to_jsonb(c) AS current_company FROM catalog.correction_requests cr JOIN catalog.companies c ON c.id=cr.company_id JOIN profiles.profiles p ON p.user_id=cr.requested_by WHERE cr.id=$1`, id)
+	if err != nil {
+		return err
+	}
+	return respond(w, 200, item)
+}
 func (s *Server) catalogCorrectionsPage(w http.ResponseWriter, r *http.Request, ownerID string) error {
 	p, err := pagination(r)
 	if err != nil {
@@ -720,12 +735,12 @@ func (s *Server) catalogCorrectionsPage(w http.ResponseWriter, r *http.Request, 
 		return invalid("status", "Неизвестный статус исправления")
 	}
 	args := []any{ownerID, status}
-	where := `($1::text='' OR requested_by=NULLIF($1,'')::uuid) AND ($2::text='' OR status=$2)`
+	where := `($1::text='' OR cr.requested_by=NULLIF($1,'')::uuid) AND ($2::text='' OR cr.status=$2)`
 	var total int64
-	if err = s.DB.QueryRow(r.Context(), `SELECT count(*) FROM catalog.correction_requests WHERE `+where, args...).Scan(&total); err != nil {
+	if err = s.DB.QueryRow(r.Context(), `SELECT count(*) FROM catalog.correction_requests cr WHERE `+where, args...).Scan(&total); err != nil {
 		return err
 	}
-	items, err := listJSON(r.Context(), s.DB, `SELECT * FROM catalog.correction_requests WHERE `+where+` ORDER BY created_at DESC,id LIMIT $3 OFFSET $4`, ownerID, status, p.Limit, p.Offset)
+	items, err := listJSON(r.Context(), s.DB, `SELECT cr.*,c.name AS company_name,p.name AS requested_by_name FROM catalog.correction_requests cr JOIN catalog.companies c ON c.id=cr.company_id JOIN profiles.profiles p ON p.user_id=cr.requested_by WHERE `+where+` ORDER BY cr.created_at DESC,cr.id LIMIT $3 OFFSET $4`, ownerID, status, p.Limit, p.Offset)
 	if err != nil {
 		return err
 	}
