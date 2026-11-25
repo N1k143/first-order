@@ -14,3 +14,7 @@ __pycache__/
 /create_*_presentation.py
 /week8_*.sql
 /frontend/tools/firstorder-figma-export.zip
+
+# Local discovery exports and raw source snapshots.
+/astana-source*.json
+/astana-candidates*.json

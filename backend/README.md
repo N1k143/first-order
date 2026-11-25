@@ -91,6 +91,8 @@ Auth POST-маршруты: `/auth/register`, `/auth/login`, `/auth/logout`, `/a
 
 ## Импорт
 
+Сбор реальных компаний Астаны и проверка сайтов: [инструкция сборщика](internal/discovery/README.md). `cmd/collect-companies` сохраняет до 100 карточек разных категорий в закрытую очередь проверки; автоматической публикации нет. Требуется миграция `004_company_discovery.sql`. Поиск сайтов вне источника включается ключом `BRAVE_SEARCH_API_KEY`; без ключа неподтверждённые карточки помечаются `needs_review`.
+
 `POST /api/v1/imports` с `{"source":"demo_csv"}` доступен модератору или внутреннему `IMPORTER_TOKEN`; возвращает `202` и `run_id`. Модератор читает `/imports` и `/imports/{run_id}`. Сервисный токен не даёт пользовательскую сессию или права модерации.
 
 Файл задаётся только оператором через `IMPORT_CSV_PATH`; пример — [companies.csv](testdata/companies.csv). Обязательные колонки `external_id,name`, остальные: `category_id,city,address,phone,email,website_url,website_status,source_url`. Максимум 20 МБ и 10 000 строк. `category_id` должен существовать. Ключ `(source,external_id)` обеспечивает повторный импорт без дублей; обновление сохраняет решение модератора о видимости.
