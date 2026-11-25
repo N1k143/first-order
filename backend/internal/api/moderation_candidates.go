@@ -375,7 +375,7 @@ func (s *Server) patchCompanyCandidate(w http.ResponseWriter, r *http.Request) e
 	return respond(w, 200, item)
 }
 
-const duplicateWhere = `c.source_url=$1 OR (lower(c.name)=lower($2) AND lower(c.city)=lower($3) AND (NULLIF($4,'') IS NULL OR lower(coalesce(c.address,''))=lower($4))) OR (NULLIF(regexp_replace($5,'[^0-9]','','g'),'') IS NOT NULL AND regexp_replace(coalesce(c.phone,''),'[^0-9]','','g')=regexp_replace($5,'[^0-9]','','g'))`
+const duplicateWhere = `c.source_url=$1 OR (lower(c.name)=lower($2) AND lower(c.city)=lower($3) AND (NULLIF($4,'') IS NULL OR lower(coalesce(c.address,''))=lower($4))) OR EXISTS(SELECT 1 FROM regexp_split_to_table(coalesce(c.phone,''),'[;,]') existing_phone CROSS JOIN regexp_split_to_table(coalesce($5::text,''),'[;,]') incoming_phone WHERE catalog.phone_key(existing_phone)=catalog.phone_key(incoming_phone))`
 
 func duplicateArgs(row candidateRecord, fields map[string]any) []any {
 	return []any{row.Payload.SourceURL, fields["name"], fields["city"], fields["address"], fields["phone"]}

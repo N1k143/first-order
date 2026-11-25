@@ -16,6 +16,7 @@ import (
 )
 
 func (s *Server) registerCatalog(r chi.Router) {
+	r.MethodFunc("GET", "/catalog/filters", handle(s.catalogFilters))
 	r.MethodFunc("GET", "/categories", handle(s.catalogListCategories))
 	r.MethodFunc("POST", "/categories", handle(s.catalogCreateCategory))
 	r.MethodFunc("PATCH", "/categories/{category_id}", handle(s.catalogPatchCategory))
@@ -284,7 +285,7 @@ func (s *Server) catalogListCompanies(w http.ResponseWriter, r *http.Request) er
 			return invalid("q", "Слишком длинный поисковый запрос")
 		}
 		args = append(args, q)
-		clauses = append(clauses, fmt.Sprintf("c.name ILIKE '%%' || $%d || '%%'", len(args)))
+		clauses = append(clauses, fmt.Sprintf("concat_ws(' ',c.name,c.address,c.phone,c.email) ILIKE '%%' || $%d || '%%'", len(args)))
 	}
 	if id := query.Get("category_id"); id != "" {
 		if !validUUID(id) {
@@ -317,11 +318,12 @@ func (s *Server) catalogListCompanies(w http.ResponseWriter, r *http.Request) er
 		return err
 	}
 	args = append(args, p.Limit, p.Offset)
-	sql := fmt.Sprintf(`SELECT c.*,cat.name AS category_name FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d`, where, order, len(args)-1, len(args))
+	sql := fmt.Sprintf(`SELECT c.*,cat.name AS category_name,`+catalogSourcesSQL+` FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d`, where, order, len(args)-1, len(args))
 	items, err := listJSON(r.Context(), s.DB, sql, args...)
 	if err != nil {
 		return err
 	}
+	decorateCatalogCompanies(w, items)
 	return paged(w, items, total, p)
 }
 func (s *Server) catalogGetCompany(w http.ResponseWriter, r *http.Request) error {
@@ -335,10 +337,11 @@ func (s *Server) catalogGetCompany(w http.ResponseWriter, r *http.Request) error
 		actorID = a.ID
 		moderator = a.Role == "moderator"
 	}
-	item, err := oneJSON(r.Context(), s.DB, `SELECT c.*,cat.name AS category_name FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE c.id=$1 AND (c.visibility='published' OR $3::boolean OR EXISTS(SELECT 1 FROM profiles.company_members m WHERE m.company_id=c.id AND m.user_id=NULLIF($2,'')::uuid))`, id, actorID, moderator)
+	item, err := oneJSON(r.Context(), s.DB, `SELECT c.*,cat.name AS category_name,`+catalogSourcesSQL+` FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE c.id=$1 AND (c.visibility='published' OR $3::boolean OR EXISTS(SELECT 1 FROM profiles.company_members m WHERE m.company_id=c.id AND m.user_id=NULLIF($2,'')::uuid))`, id, actorID, moderator)
 	if err != nil {
 		return err
 	}
+	decorateCatalogCompanies(w, []map[string]any{item})
 	return respond(w, http.StatusOK, item)
 }
 func (s *Server) catalogCreateCompany(w http.ResponseWriter, r *http.Request) error {
