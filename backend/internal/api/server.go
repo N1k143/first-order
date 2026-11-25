@@ -57,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerImports(canonical)
 	s.registerDiscovery(canonical)
 	s.registerCollection(canonical)
+	s.registerUserWorkflows(canonical)
 	canonical.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, problem(404, "NOT_FOUND", "Маршрут не найден"))
 	})

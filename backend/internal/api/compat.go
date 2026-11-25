@@ -206,6 +206,9 @@ func frontendValue(v any) any {
 					m["status"] = "pending"
 				case "accepted":
 					m["status"] = "selected"
+					if x["order_status"] == "completed" {
+						m["status"] = "completed"
+					}
 				}
 			}
 		}
