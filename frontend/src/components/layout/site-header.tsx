@@ -23,13 +23,7 @@ export function SiteHeader() {
     /^\/(workspace|dashboard|applications|saved|contacts|profile|settings|moderation)(\/|$)/.test(
       path,
     );
-  const dashboard = company
-    ? '/workspace'
-    : moderator
-      ? DEMO
-        ? '/moderation'
-        : '/companies'
-      : '/dashboard';
+  const dashboard = moderator ? '/moderation' : company ? '/workspace' : '/dashboard';
   const post = state.signedIn ? '/workspace/orders/new' : '/register/company';
   async function retrySession() {
     if (retrying) return;
@@ -118,15 +112,15 @@ export function SiteHeader() {
               {!sessionError && state.signedIn && (
                 <>
                   <Link href="/profile">Мой профиль</Link>
-                  {company ? (
+                  {moderator ? (
+                    <Link href="/moderation">Модерация</Link>
+                  ) : company ? (
                     <>
                       <Link href="/workspace/orders">Мои заказы</Link>
                       <Link href="/workspace/applications">Отклики на заказы</Link>
                       <Link href="/workspace/profile">Профиль компании</Link>
                       <Link href="/workspace/members">Участники</Link>
                     </>
-                  ) : moderator ? (
-                    <Link href="/moderation">Модерация</Link>
                   ) : (
                     <>
                       <Link href="/applications">Мои отклики</Link>

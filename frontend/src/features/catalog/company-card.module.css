@@ -40,12 +40,15 @@
 }
 @media (max-width: 700px) {
   .avatar,
-  .save,
   .bottom {
     display: none !important;
   }
   .top {
     display: contents;
+  }
+  .save {
+    width: 100%;
+    min-height: 44px;
   }
   .identity .small {
     margin-top: 0;

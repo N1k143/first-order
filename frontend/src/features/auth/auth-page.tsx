@@ -10,8 +10,9 @@ import { AuthLayout, type AuthView as View, type AuthRole } from './auth-layout'
 import type { AppState } from '@/types/domain';
 
 function accountHome(state: AppState) {
+  if (state.profile.role === 'moderator') return '/moderation';
   if (state.profile.role === 'company' || state.profile.companies?.length) return '/workspace';
-  return state.profile.role === 'moderator' ? '/companies' : '/applications';
+  return '/applications';
 }
 
 const headings: Record<View, [string, string]> = {

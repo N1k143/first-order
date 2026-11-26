@@ -24,7 +24,10 @@ export function CatalogPage() {
       .filter((c) => !state.hiddenCompanies.includes(c.id)),
     new URLSearchParams(params.toString()),
   );
-  const data = useResource('/companies?' + params.toString(), {
+  const requestParams = new URLSearchParams(params.toString());
+  requestParams.set('pageSize', String(size));
+  if (!requestParams.has('city')) requestParams.set('city', 'Астана');
+  const data = useResource('/companies?' + requestParams.toString(), {
     items: filtered.slice((page - 1) * size, page * size),
     total: filtered.length,
     page,
@@ -39,6 +42,19 @@ export function CatalogPage() {
   const filters = (
     <div className={`card ${styles.filters}`}>
       <h3>Фильтры</h3>
+      <label className="form-field mobile-only">
+        <span>Город</span>
+        <select
+          className="field"
+          aria-label="Город в фильтрах"
+          value={params.get('city') ?? 'Астана'}
+          onChange={(event) => change({ city: event.target.value })}
+        >
+          <option value="">Все города</option>
+          <option>Астана</option>
+          <option>Алматы</option>
+        </select>
+      </label>
       <p className="small">Сфера бизнеса</p>
       {!directory.data && <ResourceState error={directory.error} reload={directory.reload} />}
       {[{ id: '', name: 'Все сферы' }, ...(directory.data || [])].map((c) => (
@@ -52,11 +68,14 @@ export function CatalogPage() {
       ))}
       <hr />
       <p className="small">Статус сайта</p>
+      <button aria-pressed={!params.get('status')} onClick={() => change({ status: '' })}>
+        Все статусы
+      </button>
       {Object.entries(statusLabels).map(([v, label]) => (
         <button
           key={v}
-          className={(params.get('status') ?? 'not_found') === v ? styles.statusSelected : ''}
-          aria-pressed={(params.get('status') ?? 'not_found') === v}
+          className={params.get('status') === v ? styles.statusSelected : ''}
+          aria-pressed={params.get('status') === v}
           onClick={() => change({ status: v })}
         >
           {label}

@@ -3,7 +3,7 @@ export function filterCompanies(items: Company[], params: URLSearchParams) {
   const query = (params.get('q') || '').trim().toLocaleLowerCase('ru');
   const city = params.get('city') ?? 'Астана',
     category = params.get('category_id') || params.get('category') || '',
-    status = params.get('status') ?? 'not_found';
+    status = params.get('status') || '';
   const result = items.filter(
     (c) =>
       (!city || c.city === city) &&

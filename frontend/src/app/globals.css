@@ -670,3 +670,24 @@ p {
 .text-link {
   overflow-wrap: anywhere;
 }
+
+@media (max-width: 480px) {
+  .account-grid .button-row {
+    gap: 12px;
+  }
+  .account-grid .button-row .button {
+    flex-basis: 100%;
+    min-height: 44px;
+  }
+  .account-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+  .account-nav a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    white-space: normal;
+  }
+}

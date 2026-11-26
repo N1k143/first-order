@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { AccountShell } from '@/components/layout/account-shell';
 import { EmptyState, Textarea, Notice } from '@/components/ui/primitives';
 import { AccountAccess } from '@/features/account/account-access';
-import { useAppState, updateDemo } from '@/lib/state/store';
+import { useAppState, updateDemo, DEMO } from '@/lib/state/store';
+import { RealModerationPage } from './real-moderation-page';
 import { dateLabel } from '@/lib/format';
 import { companies } from '@/data/demo';
 
@@ -12,6 +13,7 @@ export function ModerationPage({ view = 'queue' }: { view?: 'queue' | 'import' |
   const state = useAppState();
   const [message, setMessage] = useState('');
   const queue = state.corrections.filter((c) => c.status === 'pending');
+  if (!DEMO) return <RealModerationPage view={view} />;
   return (
     <AccountShell
       title={
