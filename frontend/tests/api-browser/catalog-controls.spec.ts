@@ -96,6 +96,7 @@ test('combined filters survive quick changes, canonical links and reloads', asyn
   await expect.poll(() => requests.at(-1)?.searchParams.get('status')).toBe('found');
   expect(requests.at(-1)?.searchParams.get('category_id')).toBe('category-cafe');
   expect(requests.at(-1)?.searchParams.has('website_status')).toBe(false);
+  await expect(page.locator('main [aria-busy]')).toHaveAttribute('aria-busy', 'false');
   await page.reload();
   await expect(page.getByRole('button', { name: 'Кафе', exact: true })).toHaveAttribute(
     'aria-pressed',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAppState } from '@/lib/state/store';
 import { useResource } from '@/lib/api/resources';
 import { PageHeading, Select, Field, ResourceState, EmptyState } from '@/components/ui/primitives';
@@ -11,16 +11,15 @@ import styles from '@/features/catalog/catalog.module.css';
 export function OrdersPage() {
   const state = useAppState();
   const p = useSearchParams();
-  const router = useRouter();
 
   function change(values: Record<string, string>) {
-    const q = new URLSearchParams(p.toString());
+    const q = new URLSearchParams(window.location.search);
 
     for (const [key, value] of Object.entries(values)) {
       q.set(key, value);
     }
 
-    router.replace('/orders?' + q.toString(), { scroll: false });
+    window.history.replaceState(null, '', '/orders?' + q.toString());
   }
 
   const rows = state.orders.filter(
@@ -95,7 +94,11 @@ export function OrdersPage() {
         Применить
       </button>
 
-      <button type="button" className="text-button small" onClick={() => router.replace('/orders')}>
+      <button
+        type="button"
+        className="text-button small"
+        onClick={() => window.history.replaceState(null, '', '/orders')}
+      >
         Сбросить фильтры
       </button>
     </form>
@@ -112,6 +115,8 @@ export function OrdersPage() {
 
       <form
         className="order-search"
+        role="search"
+        aria-label="Поиск заказов"
         onSubmit={(event) => {
           event.preventDefault();
 
@@ -122,6 +127,7 @@ export function OrdersPage() {
         <input
           className="field"
           name="q"
+          enterKeyHint="search"
           key={p.get('q')}
           aria-label="Поиск заказов"
           placeholder="Название или описание задачи"

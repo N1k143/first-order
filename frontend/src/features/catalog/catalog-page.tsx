@@ -1,6 +1,6 @@
 'use client';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { useOptimistic, useRef, useTransition } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useRef } from 'react';
 import { companies } from '@/data/demo';
 import { useCategories } from '@/lib/api/categories';
 import { useResource } from '@/lib/api/resources';
@@ -12,14 +12,8 @@ import { EmptyState, PageHeading, ResourceState } from '@/components/ui/primitiv
 import styles from './catalog.module.css';
 export function CatalogPage() {
   const urlParams = useSearchParams(),
-    router = useRouter(),
-    pathname = usePathname(),
     dialog = useRef<HTMLDialogElement>(null);
-  const [queryString, setQueryString] = useOptimistic(
-    catalogParams(urlParams.toString()).toString(),
-  );
-  const [pending, startTransition] = useTransition();
-  const params = new URLSearchParams(queryString);
+  const params = catalogParams(urlParams.toString());
   const state = useAppState();
   const directory = useCategories();
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1),
@@ -40,16 +34,13 @@ export function CatalogPage() {
     pageSize: size,
   });
   function change(values: Record<string, string>) {
-    const p = new URLSearchParams(params.toString());
+    const p = catalogParams(window.location.search);
     p.delete('page');
     for (const [k, v] of Object.entries(values)) p.set(k, v);
     navigate(p);
   }
   function navigate(p: URLSearchParams) {
-    startTransition(() => {
-      setQueryString(p.toString());
-      router.replace(pathname + '?' + p.toString(), { scroll: false });
-    });
+    window.history.replaceState(null, '', window.location.pathname + '?' + p.toString());
   }
   const sortOptions = (
     <>
@@ -148,7 +139,7 @@ export function CatalogPage() {
       </form>
       <div className={styles.layout}>
         <aside className={styles.sidebar}>{filters}</aside>
-        <div className={styles.results} aria-busy={pending || data.loading}>
+        <div className={styles.results} aria-busy={data.loading}>
           {data.data ? (
             <>
               <div className="spread">
