@@ -24,7 +24,7 @@ func TestMigrationOuterTransaction(t *testing.T) {
 		}
 	}
 	files, _ := filepath.Glob("../../migrations/*.sql")
-	if len(files) != 8 {
+	if len(files) != 9 {
 		t.Fatal("update expected migration coverage")
 	}
 	for _, file := range files {

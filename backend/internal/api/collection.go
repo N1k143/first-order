@@ -11,6 +11,9 @@ import (
 const collectionColumns = `id,kind,source,city,requested_limit,status,created_by,attempt,processed,total,saved,skipped,found,needs_review,error_code,cancel_requested,available_at,created_at,started_at,finished_at,updated_at`
 
 func (s *Server) registerCollection(r chi.Router) {
+	r.Get("/collection/replenishment", handle(s.getReplenishment))
+	r.Patch("/collection/replenishment", handle(s.patchReplenishment))
+	r.Get("/collection/replenishment/history", handle(s.replenishmentHistory))
 	r.Post("/collection/jobs", handle(s.createCollection))
 	r.Get("/collection/jobs", handle(s.listCollection))
 	r.Get("/collection/jobs/{job_id}", handle(s.getCollection))

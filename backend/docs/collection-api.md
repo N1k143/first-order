@@ -17,7 +17,7 @@ Content-Type: application/json
 
 Новый запуск возвращает `202` и объект задания. Повтор того же ключа с теми же параметрами и автором возвращает тот же объект с `200`, включая завершённое задание. Изменение параметров при том же ключе — `409 IDEMPOTENCY_CONFLICT`. Для новой операции нужен новый UUID.
 
-Одновременно допускается одно pending/running-задание: `409 COLLECTION_ACTIVE` при попытке создать второе. Повторная проверка одной карточки допускается не чаще раза в сутки. Если очередь recheck пуста — `409 NO_CANDIDATES`. Запросы к публичному Overpass допускаются не чаще одного раза в час, включая неудачные попытки; отложенный запуск остаётся `pending`, точное время — `available_at`. Планировщик периодического массового сбора не включён. Это ограниченный ручной сбор, а не гарантия полного покрытия города.
+Одновременно допускается одно pending/running-задание: `409 COLLECTION_ACTIVE` при попытке создать второе. Повторная проверка одной карточки допускается не чаще раза в сутки. Если очередь recheck пуста — `409 NO_CANDIDATES`. Запросы к публичному Overpass допускаются не чаще одного раза в час, включая неудачные попытки; отложенный запуск остаётся `pending`, точное время — `available_at`. После миграции 009 доступно [автоматическое пополнение по нижнему порогу](catalog-replenishment.md), использующее ту же очередь. Это не гарантия полного покрытия города.
 
 ## Прогресс и история
 
@@ -30,7 +30,7 @@ Content-Type: application/json
 
 Для cancel/retry тело не требуется. Неизвестный UUID задания — `404`; некорректные параметры — `422`.
 
-Поля задания: `id,kind,source,city,requested_limit,status,created_by,attempt,processed,total,saved,skipped,found,needs_review,error_code,cancel_requested,available_at,created_at,started_at,finished_at,updated_at`. Время передаётся в UTC. `created_by=null` означает запуск оператором с сервера, без пользовательской сессии.
+Поля задания: `id,kind,source,city,requested_limit,status,created_by,attempt,processed,total,saved,skipped,found,needs_review,error_code,cancel_requested,available_at,created_at,started_at,finished_at,updated_at`. Время передаётся в UTC. `created_by=null` означает запуск оператором с сервера либо автоматическим пополнением, без пользовательской сессии. Автопополнение отмечено событием `automatic_replenishment`.
 
 Статусы: `pending → running → completed/failed/canceled`. `total=0` до получения исходного списка; затем `processed/total` отражает сохранённые контрольные точки. Пустая новая порция завершается с `completed,total=0`. `saved+skipped=processed`: skipped означает защиту изменённой/рассмотренной карточки, а не ошибку сети. `found+needs_review=processed` описывает результаты проверок, включая skipped. После отмены уже сохранённые результаты остаются; незавершённая проверка не сохраняется.
 
