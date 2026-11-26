@@ -127,3 +127,15 @@
     display: block !important;
   }
 }
+
+@media (max-width: 1000px) {
+  .filters button {
+    min-height: 44px;
+    padding-block: 8px;
+  }
+
+  .filtersDialog :global(.text-button) {
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+}
