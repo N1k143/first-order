@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"ingeneriya/backend/internal/api"
 	"net/netip"
 	"net/url"
@@ -53,6 +54,12 @@ func Load() (api.Config, error) {
 	if cfg.ImporterToken != "" && len(cfg.ImporterToken) < 32 {
 		return cfg, fmt.Errorf("IMPORTER_TOKEN must contain at least 32 characters")
 	}
+	if cfg.DatabaseURL == "" {
+		return cfg, fmt.Errorf("DATABASE_URL is required")
+	}
+	if _, err := pgx.ParseConfig(cfg.DatabaseURL); err != nil {
+		return cfg, fmt.Errorf("invalid DATABASE_URL")
+	}
 	if cfg.Environment == "production" {
 		if !cfg.CookieSecure || len(cfg.ReadyToken) < 32 || cfg.SupabaseAnonKey == "" {
 			return cfg, fmt.Errorf("production requires secure cookies, READY_TOKEN of at least 32 characters, SUPABASE_ANON_KEY")
@@ -75,8 +82,14 @@ func Load() (api.Config, error) {
 		if !allowed || u.Path != "/auth/callback" {
 			return cfg, fmt.Errorf("production callback must be /auth/callback on an allowed origin")
 		}
-		if !strings.HasPrefix(cfg.SupabaseURL, "https://") {
-			return cfg, fmt.Errorf("production SUPABASE_URL must use HTTPS")
+		authURL, _ := url.Parse(cfg.SupabaseURL)
+		localAuth := false
+		if authURL != nil && authURL.Scheme == "http" {
+			ip, e := netip.ParseAddr(authURL.Hostname())
+			localAuth = e == nil && ip.IsLoopback()
+		}
+		if !strings.HasPrefix(cfg.SupabaseURL, "https://") && !localAuth {
+			return cfg, fmt.Errorf("production SUPABASE_URL requires HTTPS or a literal loopback HTTP address")
 		}
 		if cfg.JWTSecret != "" && len(cfg.JWTSecret) < 32 {
 			return cfg, fmt.Errorf("production JWT_SECRET is too short")

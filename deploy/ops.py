@@ -198,7 +198,7 @@ def restore_check(root, path):
             return {'status': 'ok', 'operation': 'restore-check', 'tables': len(restored)}
         finally:
             if created:
-                execute(['docker', 'rm', '-f', name])
+                execute(['docker', 'rm', '-f', '-v', name])
 
 
 def environment(root):
