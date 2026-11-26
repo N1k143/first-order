@@ -37,7 +37,7 @@ export interface Order {
   visibility?: boolean;
 }
 export interface Profile {
-  /** Stored URL; data URLs are allowed only in the local demo upload flow. */
+  /** Stored URL or a server-validated image data URL up to 256 KiB. */
   avatarUrl?: string;
   companies?: { companyId: string; memberRole: string; name?: string }[];
   id: string;

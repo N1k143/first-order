@@ -235,7 +235,7 @@ func TestOrdersIntegrationLifecycleAndACL(t *testing.T) {
 		t.Fatalf("incorrect application states: %s %s", chosenState, withdrawnState)
 	}
 	testStatus(t, testRequest(t, s, "POST", base+"/complete", f.Owner, nil), 200)
-	testStatus(t, testRequest(t, s, "POST", base+"/complete", f.Owner, nil), 409)
+	testStatus(t, testRequest(t, s, "POST", base+"/complete", f.Owner, nil), 200)
 	testStatus(t, testRequest(t, s, "GET", base, f.Developer, nil), 200)
 }
 

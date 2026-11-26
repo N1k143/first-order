@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react';
 import { migrateDemoState } from './migrate';
 import { initialState } from '@/data/demo';
-import { apiRequest } from '@/lib/api/client';
+import { ApiError, apiRequest } from '@/lib/api/client';
 import type {
   AppState,
   Application,
@@ -54,6 +54,18 @@ const serverSnapshot = DEMO ? initialState : emptyState;
 let state = serverSnapshot;
 let initialized = false;
 let ready = false;
+let sessionError: string | undefined;
+let selectedCompanyId: string | null = null;
+let selectedForUser: string | null = null;
+const COMPANY_KEY = 'firstorder:company';
+function rememberCompany(userId: string, companyId: string | null) {
+  try {
+    if (companyId) sessionStorage.setItem(COMPANY_KEY, JSON.stringify({ userId, companyId }));
+    else sessionStorage.removeItem(COMPANY_KEY);
+  } catch {
+    /* Selection still works in memory when storage is unavailable. */
+  }
+}
 let generation = 0;
 let loadingController: AbortController | undefined;
 let latestRefresh: Promise<AppState> | undefined;
@@ -77,6 +89,7 @@ export function refreshAppState(): Promise<AppState> {
 }
 async function loadRemoteState(version: number, signal: AbortSignal): Promise<AppState> {
   const next: AppState = structuredClone(emptyState);
+  let loadError: string | undefined;
   const orderTask = apiRequest<Order[] | { items: Order[] }>('/orders?limit=100', { signal })
     .then((value) => {
       next.orders = items(value);
@@ -143,14 +156,35 @@ async function loadRemoteState(version: number, signal: AbortSignal): Promise<Ap
       tasks.push(
         apiRequest<Portfolio[] | { items: Portfolio[] }>('/me/portfolio?limit=100', { signal })
           .then((value) => {
-            next.portfolio = items(value);
+            next.portfolio = items(value).map((item) => ({
+              ...item,
+              description: item.description || '',
+              url: item.url || '',
+            }));
           })
           .catch(() => {
             next.portfolio = [];
           }),
       );
     }
-    const companyId = profile.companies?.[0]?.companyId;
+    const memberships = profile.companies || [];
+    let chosen = selectedForUser === profile.id ? selectedCompanyId : null;
+    if (!chosen) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(COMPANY_KEY) || 'null');
+        if (saved?.userId === profile.id) chosen = saved.companyId;
+      } catch {
+        /* Ignore malformed or unavailable preference storage. */
+      }
+    }
+    const companyId = memberships.some((item) => item.companyId === chosen)
+      ? chosen
+      : memberships[0]?.companyId || null;
+    if (version === generation && !signal.aborted) {
+      selectedCompanyId = companyId;
+      selectedForUser = profile.id;
+      rememberCompany(profile.id, companyId);
+    }
     if (companyId)
       tasks.push(
         apiRequest<Company>(`/companies/${encodeURIComponent(companyId)}`, { signal })
@@ -162,13 +196,20 @@ async function loadRemoteState(version: number, signal: AbortSignal): Promise<Ap
           }),
       );
     await Promise.all(tasks);
-  } catch {
-    // Clear personal data for signed-out/unavailable sessions. Page resources report
-    // request errors separately. A newer refresh owns publication after cancellation.
+  } catch (error) {
+    if (!signal.aborted && !(error instanceof ApiError && error.status === 401)) {
+      loadError = error instanceof Error ? error.message : 'Не удалось загрузить аккаунт.';
+    }
   }
   await orderTask;
   if (version !== generation || signal.aborted) return latestRefresh || state;
   state = next;
+  sessionError = loadError;
+  if (!next.signedIn && !loadError) {
+    selectedCompanyId = null;
+    selectedForUser = null;
+    rememberCompany('', null);
+  }
   ready = true;
   notify();
   return state;
@@ -229,4 +270,36 @@ export function useStoreReady() {
     () => ready,
     () => false,
   );
+}
+
+/** A connection failure must not be presented as a successful sign-out. */
+export function useSessionError() {
+  return useSyncExternalStore(
+    subscribe,
+    () => sessionError,
+    () => undefined,
+  );
+}
+export function useSelectedCompanyId() {
+  return useSyncExternalStore(
+    subscribe,
+    () => (DEMO ? state.company.id || null : selectedCompanyId),
+    () => null,
+  );
+}
+export async function selectCompany(id: string): Promise<AppState> {
+  if (DEMO) {
+    if (id !== state.company.id) throw new Error('Компания недоступна.');
+    return state;
+  }
+  if (!state.signedIn || !state.profile.companies?.some((company) => company.companyId === id)) {
+    throw new Error('Нет доступа к этой компании.');
+  }
+  if (id === selectedCompanyId && state.company.id === id) return state;
+  selectedCompanyId = id;
+  selectedForUser = state.profile.id;
+  rememberCompany(state.profile.id, id);
+  state = { ...state, company: structuredClone(emptyState.company) };
+  notify();
+  return refreshAppState();
 }

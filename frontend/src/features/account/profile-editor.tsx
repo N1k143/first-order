@@ -4,15 +4,19 @@ import Link from 'next/link';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Field, Textarea, Notice } from '@/components/ui/primitives';
-import { useAppState, updateDemo } from '@/lib/state/store';
+import { DEMO, useAppState, updateDemo } from '@/lib/state/store';
 import { profileFields } from '@/lib/api/profile-fields';
+import { mutate } from '@/lib/api/resources';
+import type { Profile } from '@/types/domain';
 
-export function ProfileEditor() {
-  const { profile } = useAppState();
+export function ProfileEditor({ profile: suppliedProfile }: { profile?: Profile }) {
+  const state = useAppState();
+  const profile = suppliedProfile || state.profile;
   const [avatar, setAvatar] = useState(profile.avatarUrl || '');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const uploadVersion = useRef(0);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -28,7 +32,12 @@ export function ProfileEditor() {
     setReading(true);
     try {
       const bitmap = await createImageBitmap(file);
+      const validDimensions = bitmap.width <= 2048 && bitmap.height <= 2048;
       bitmap.close();
+      if (!validDimensions) {
+        setError('Размер фото не должен превышать 2048 × 2048 пикселей.');
+        return;
+      }
       const result = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
@@ -47,8 +56,11 @@ export function ProfileEditor() {
   return (
     <form
       className="card stack"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
+        if (saving || reading) return;
+        setError('');
+        setMessage('');
         const values = new FormData(event.currentTarget);
         const fields = profileFields(values);
         const name = fields.name;
@@ -56,29 +68,37 @@ export function ProfileEditor() {
           setError('Укажите имя, не состоящее из пробелов.');
           return;
         }
-        updateDemo((state) => ({
-          ...state,
-          profile: {
-            ...state.profile,
-            name,
-            avatarUrl: avatar,
-            bio: fields.bio || '',
-            skills: [
-              ...new Set(
-                (fields.skills || '')
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
+        setSaving(true);
+        try {
+          await mutate('/me/profile', 'PATCH', fields, () =>
+            updateDemo((state) => ({
+              ...state,
+              profile: {
+                ...state.profile,
+                name,
+                avatarUrl: avatar,
+                bio: fields.bio || '',
+                skills: [
+                  ...new Set(
+                    (fields.skills || '')
+                      .split(',')
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  ),
+                ],
+                github: fields.github_url || '',
+              },
+              applications: state.applications.map((application) =>
+                application.profileId === state.profile.id ? { ...application, name } : application,
               ),
-            ],
-            github: fields.github_url || '',
-          },
-          applications: state.applications.map((application) =>
-            application.profileId === state.profile.id ? { ...application, name } : application,
-          ),
-        }));
-        setError('');
-        setMessage('Профиль сохранён в этом браузере.');
+            })),
+          );
+          setMessage(DEMO ? 'Профиль сохранён в этом браузере.' : 'Профиль сохранён.');
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : 'Не удалось сохранить профиль.');
+        } finally {
+          setSaving(false);
+        }
       }}
     >
       <input type="hidden" name="avatar_url" value={avatar} />
@@ -91,10 +111,11 @@ export function ProfileEditor() {
             type="file"
             accept="image/png,image/jpeg,image/webp"
             onChange={upload}
-            disabled={reading}
+            disabled={reading || saving}
           />
           <p className="caption muted">
-            PNG, JPEG или WebP · до 256 КБ. Фото сохраняется только в демопрофиле.
+            PNG, JPEG или WebP · до 256 КБ, до 2048 × 2048 пикселей.{' '}
+            {DEMO ? 'Фото сохраняется только в демопрофиле.' : 'Фото сохраняется в вашем аккаунте.'}
           </p>
         </div>
       </div>
@@ -104,14 +125,14 @@ export function ProfileEditor() {
         pattern="https?://.*"
         placeholder="https://example.com/photo.jpg"
         value={avatar.startsWith('data:') ? '' : avatar}
-        disabled={reading}
+        disabled={reading || saving}
         onChange={(event) => setAvatar(event.target.value)}
       />
       {avatar && (
         <button
           type="button"
           className="text-button align-start"
-          disabled={reading}
+          disabled={reading || saving}
           onClick={() => setAvatar('')}
         >
           Удалить фото
@@ -155,8 +176,8 @@ export function ProfileEditor() {
         </Link>
       </p>
       <div className="button-row">
-        <button className="button" disabled={reading}>
-          {reading ? 'Загрузка фото…' : 'Сохранить изменения'}
+        <button className="button" disabled={reading || saving}>
+          {reading ? 'Загрузка фото…' : saving ? 'Сохраняем…' : 'Сохранить изменения'}
         </button>
         <Link className="button secondary" href="/profile/portfolio">
           Редактировать портфолио

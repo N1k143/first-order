@@ -8,3 +8,17 @@ __pycache__/
 .env.*
 !.env.example
 *.log
+
+# Presentation materials, superseded SQL scripts and generated design bundles.
+/*.pptx
+/create_*_presentation.py
+/week8_*.sql
+/frontend/tools/firstorder-figma-export.zip
+
+# Local discovery exports and raw source snapshots.
+/astana-source*.json
+/astana-candidates*.json
+
+# Private scheduled operations and database backups.
+/.backups/
+/.ops/

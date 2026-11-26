@@ -1,0 +1,66 @@
+name: Backend checks
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', 'deploy/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['backend/**', 'deploy/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: integration-local-only
+          POSTGRES_DB: firstorder_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:integration-local-only@127.0.0.1:5432/firstorder_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://postgres:integration-local-only@127.0.0.1:5432/firstorder_test?sslmode=disable
+      PGPASSWORD: integration-local-only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Bootstrap isolated Auth schema
+        run: |
+          psql -h 127.0.0.1 -U postgres -d firstorder_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users(id uuid PRIMARY KEY,email text);
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          SQL
+      - name: Apply and replay migrations
+        working-directory: backend
+        run: |
+          go run ./cmd/migrate
+          go run ./cmd/migrate
+      - name: Check and test backend
+        working-directory: backend
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...
+          go build -trimpath -o /tmp/firstorder-api ./cmd/api
+      - name: Check known vulnerabilities
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      - name: Check operational tools
+        run: |
+          python3 -m unittest discover -s deploy -p 'test_*.py'
+          python3 -m unittest discover -s backend/tools -p 'test_dgis*.py'
+          python3 -m py_compile deploy/ops.py

@@ -8,7 +8,8 @@ Required environment: `E2E_BASE_URL`, `E2E_ALLOW_WRITES=1`, `E2E_RUN_TAG`,
 `E2E_DEVELOPER_PASSWORD`. Use two isolated accounts whose email local parts
 contain the exact run tag (lowercase 8–64 characters including `e2e`). Passwords
 must contain at least 12 characters. The company owner must own exactly one
-company whose name contains the run tag. Supply secrets through the process
+company whose name contains the run tag, or set `E2E_COMPANY_ID` to select one
+owned tagged company when testing a multi-company account. Supply secrets through the process
 environment, never command arguments or committed files.
 
 Run from `frontend`: `npx playwright test --config=playwright.production.config.ts`.

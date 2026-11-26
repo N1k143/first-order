@@ -87,8 +87,12 @@ test('production UI: draft → publish → apply → select → accepted', async
       developerPage = await developer.newPage();
     await login(companyPage, companyAccount, 'company');
     const companyProfile = await read<Profile>(company, '/me');
+    const expectedCompany = process.env.E2E_COMPANY_ID;
     const owned = companyProfile.companies.filter(
-      (c) => c.member_role === 'owner' && c.name.includes(tag),
+      (c) =>
+        c.member_role === 'owner' &&
+        c.name.includes(tag) &&
+        (!expectedCompany || c.company_id === expectedCompany),
     );
     expect(owned.length, 'Exactly one tagged company is required').toBe(1);
     manifest.user_ids.push(companyProfile.user_id);

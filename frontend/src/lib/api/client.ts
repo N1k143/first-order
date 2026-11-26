@@ -57,7 +57,8 @@ async function request<T>(path: string, options: RequestOptions, mayRefresh: boo
   if (response.status === 401 && mayRefresh && !path.startsWith('/auth/') && !signal?.aborted) {
     try {
       await refreshSession();
-    } catch {
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error;
       throw new ApiError(401, 'Войдите в аккаунт, чтобы продолжить.', payload);
     }
     // A 401 occurs before a protected handler runs. Other mutation failures are never retried.

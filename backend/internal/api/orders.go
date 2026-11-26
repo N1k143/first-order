@@ -43,7 +43,9 @@ const orderSelect = `SELECT o.*, c.name AS company_name, c.city,
  FROM orders.orders o JOIN catalog.companies c ON c.id=o.company_id`
 
 const orderApplicationSelect = `SELECT a.*, p.name AS developer_name,
- o.title AS order_title, o.company_id, c.name AS company_name
+ o.title AS order_title, o.company_id, c.name AS company_name,
+ o.status AS order_status,o.visibility AS order_visibility,
+ (o.selected_application_id=a.id) IS TRUE AS is_selected
  FROM applications.applications a
  JOIN profiles.profiles p ON p.user_id=a.developer_id
  JOIN orders.orders o ON o.id=a.order_id
@@ -523,6 +525,9 @@ func (s *Server) orderTransition(w http.ResponseWriter, r *http.Request, next st
 			return err
 		}
 	}
+	if order.Status == next {
+		return orderCommit(w, r, tx, id, http.StatusOK)
+	}
 	switch next {
 	case "open":
 		err = orderState(order.Status, "draft")
@@ -540,10 +545,23 @@ func (s *Server) orderTransition(w http.ResponseWriter, r *http.Request, next st
 		return err
 	}
 	if next == "closed" {
+		if err = notifyDecision(r.Context(), tx, actor.ID, id, nil); err != nil {
+			return err
+		}
+		if order.SelectedApplicationID != nil {
+			if err = notifyApplicant(r.Context(), tx, actor.ID, id, *order.SelectedApplicationID, "order_closed"); err != nil {
+				return err
+			}
+		}
 		// Accepted replies and selected_application_id remain as history of the
 		// cancelled engagement. Pending replies can no longer be selected.
 		_, err = tx.Exec(r.Context(), `UPDATE applications.applications SET status='rejected',updated_at=now() WHERE order_id=$1::uuid AND status='submitted'`, id)
 		if err != nil {
+			return err
+		}
+	}
+	if next == "completed" && order.SelectedApplicationID != nil {
+		if err = notifyApplicant(r.Context(), tx, actor.ID, id, *order.SelectedApplicationID, "order_completed"); err != nil {
 			return err
 		}
 	}
@@ -668,6 +686,9 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) error
 	err = tx.QueryRow(r.Context(), `INSERT INTO applications.applications(order_id,developer_id,message,proposed_price,proposed_deadline,status)
  VALUES($1::uuid,$2::uuid,$3,$4::numeric,$5::date,'submitted') RETURNING id::text`, orderID, actor.ID, d.Message, d.ProposedPrice, d.ProposedDeadline).Scan(&id)
 	if err != nil {
+		return err
+	}
+	if err = notifyCompany(r.Context(), tx, actor.ID, orderID, id, "application_submitted"); err != nil {
 		return err
 	}
 	return orderApplicationCommit(w, r, tx, id, http.StatusCreated)
@@ -854,10 +875,23 @@ func (s *Server) withdrawApplication(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return err
 	}
+	var owner, status string
+	if err = tx.QueryRow(r.Context(), `SELECT developer_id::text,status FROM applications.applications WHERE id=$1 FOR UPDATE`, id).Scan(&owner, &status); err != nil {
+		return err
+	}
+	if !strings.EqualFold(owner, actor.ID) {
+		return problem(403, "FORBIDDEN", "Отозвать отклик может только его автор")
+	}
+	if status == "withdrawn" {
+		return orderApplicationCommit(w, r, tx, id, http.StatusOK)
+	}
 	if err = orderLockApplication(r.Context(), tx, id, order.ID, actor.ID); err != nil {
 		return err
 	}
 	if _, err = tx.Exec(r.Context(), `UPDATE applications.applications SET status='withdrawn',updated_at=now() WHERE id=$1::uuid`, id); err != nil {
+		return err
+	}
+	if err = notifyCompany(r.Context(), tx, actor.ID, order.ID, id, "application_withdrawn"); err != nil {
 		return err
 	}
 	return orderApplicationCommit(w, r, tx, id, http.StatusOK)
@@ -893,6 +927,9 @@ func (s *Server) selectApplication(w http.ResponseWriter, r *http.Request) error
 	if err = orderMember(r.Context(), tx, actor, order.CompanyID); err != nil {
 		return err
 	}
+	if order.SelectedApplicationID != nil && *order.SelectedApplicationID == d.ApplicationID && oneOf(order.Status, "contractor_selected", "completed") {
+		return orderCommit(w, r, tx, orderID, http.StatusOK)
+	}
 	if err = orderState(order.Status, "open"); err != nil {
 		return err
 	}
@@ -909,6 +946,9 @@ func (s *Server) selectApplication(w http.ResponseWriter, r *http.Request) error
 	}
 	if status != "submitted" {
 		return problem(http.StatusConflict, "APPLICATION_STATE_CONFLICT", "Выбрать можно только отправленный отклик")
+	}
+	if err = notifyDecision(r.Context(), tx, actor.ID, orderID, &d.ApplicationID); err != nil {
+		return err
 	}
 	_, err = tx.Exec(r.Context(), `UPDATE applications.applications SET status=CASE WHEN id=$2::uuid THEN 'accepted' ELSE 'rejected' END,updated_at=now()
  WHERE order_id=$1::uuid AND status='submitted'`, orderID, d.ApplicationID)

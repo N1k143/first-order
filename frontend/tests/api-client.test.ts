@@ -87,3 +87,13 @@ test('an unauthorized retry does not loop and login never refreshes', async () =
   );
   assert.equal(fetchMock.mock.callCount(), 4);
 });
+
+test('a refresh outage remains a service error rather than reporting a signed-out account', async () => {
+  mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) =>
+    Response.json({}, { status: String(input) === '/api/auth/refresh' ? 503 : 401 }),
+  );
+  await assert.rejects(
+    apiRequest('/me'),
+    (error: unknown) => error instanceof ApiError && error.status === 503,
+  );
+});

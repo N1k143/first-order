@@ -1,7 +1,8 @@
 'use client';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useRef } from 'react';
-import { companies, categories } from '@/data/demo';
+import { companies } from '@/data/demo';
+import { useCategories } from '@/lib/api/categories';
 import { useResource } from '@/lib/api/resources';
 import { useAppState } from '@/lib/state/store';
 import { CompanyCard, statusLabels } from './company-card';
@@ -14,7 +15,7 @@ export function CatalogPage() {
     pathname = usePathname(),
     dialog = useRef<HTMLDialogElement>(null);
   const state = useAppState();
-  const directory = useResource('/categories', categories);
+  const directory = useCategories();
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1),
     size = 3;
   const filtered = filterCompanies(

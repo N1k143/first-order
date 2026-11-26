@@ -4,7 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { mutate, useResource } from '@/lib/api/resources';
-import { DEMO, refreshAppState, updateDemo, useAppState } from '@/lib/state/store';
+import {
+  DEMO,
+  refreshAppState,
+  selectCompany,
+  updateDemo,
+  useAppState,
+  useSelectedCompanyId,
+} from '@/lib/state/store';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   EmptyState,
@@ -22,6 +29,12 @@ import { orderStatus, applicationStatus } from '@/lib/order-status';
 import { budgetLabel, deadlineLabel } from '@/lib/format';
 import { orderFields } from '@/lib/api/form-fields';
 import { validateOrder } from '@/lib/state/order-actions';
+import { CompanyWorkspaceShell } from './workspace-shell';
+import {
+  useWorkspaceCollection,
+  workspaceApplication,
+  type CompanyApplicationRow,
+} from './workspace-data';
 
 function useMemberships() {
   const state = useAppState();
@@ -55,79 +68,11 @@ function LoginRequired() {
   );
 }
 
-export function WorkspaceOrdersPage({ applicationsOnly = false }: { applicationsOnly?: boolean }) {
-  const state = useAppState(),
-    me = useMemberships();
-  const resource = useResource<Order[]>(
-    '/orders?mine=true&limit=100',
-    state.orders.filter((o) => o.companyId === state.company.id),
-  );
-  const companies = me.data?.companies || [];
-  return (
-    <section className="container page">
-      <PageHeading
-        title={applicationsOnly ? 'Отклики на заказы' : 'Мои заказы'}
-        description={
-          applicationsOnly
-            ? 'Откройте заказ, чтобы просмотреть предложения и выбрать исполнителя.'
-            : 'Черновики, публикации и выбор исполнителя.'
-        }
-      />
-      {!me.data ? (
-        <>
-          <ResourceState error={me.error} reload={me.reload} />
-          {me.error && <LoginRequired />}
-        </>
-      ) : !companies.length ? (
-        <NoMembership />
-      ) : (
-        <div className="stack-lg">
-          <div>
-            <Link className="button" href="/workspace/orders/new">
-              Создать заказ
-            </Link>
-          </div>
-          {resource.data ? (
-            resource.data.length ? (
-              resource.data.map((order) => (
-                <article className="card stack" key={order.id}>
-                  <div>
-                    <span className="badge">{orderStatus[order.status]}</span>
-                  </div>
-                  <h2>
-                    <Link href={`/workspace/orders/${order.id}`}>{order.title}</Link>
-                  </h2>
-                  <p className="muted">
-                    {order.companyName} · {budgetLabel(order.budgetMin, order.budgetMax)}
-                  </p>
-                  <p>{order.applicationsCount} откликов</p>
-                  <Link
-                    className="button secondary align-start"
-                    href={`/workspace/orders/${order.id}${applicationsOnly ? '#order-applications' : ''}`}
-                  >
-                    {applicationsOnly ? 'Открыть отклики' : 'Управлять заказом'}
-                  </Link>
-                </article>
-              ))
-            ) : (
-              <EmptyState
-                title="Заказов пока нет"
-                description="Создайте черновик, проверьте условия и опубликуйте задачу."
-              />
-            )
-          ) : (
-            <ResourceState error={resource.error} reload={resource.reload} />
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
 export function NewOrderPage() {
   const me = useMemberships(),
     router = useRouter(),
     state = useAppState();
+  const selectedCompanyId = useSelectedCompanyId();
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const companies = me.data?.companies || [];
@@ -181,11 +126,10 @@ export function NewOrderPage() {
     }
   }
   return (
-    <section className="container page">
-      <PageHeading
-        title="Новый заказ"
-        description="Сначала создайте черновик. Публикация — отдельный шаг."
-      />
+    <CompanyWorkspaceShell
+      title="Новый заказ"
+      description="Сначала создайте черновик. Публикация — отдельный шаг."
+    >
       {!me.data ? (
         <>
           <ResourceState error={me.error} reload={me.reload} />
@@ -195,7 +139,17 @@ export function NewOrderPage() {
         <NoMembership />
       ) : (
         <form className="card stack auth-card" onSubmit={submit}>
-          <Select label="Компания" name="company" required>
+          <Select
+            label="Компания"
+            name="company"
+            value={selectedCompanyId || companies[0]?.companyId || ''}
+            onChange={(event) =>
+              void selectCompany(event.target.value).catch((error) =>
+                setError(error instanceof Error ? error.message : 'Не удалось выбрать компанию.'),
+              )
+            }
+            required
+          >
             {companies.map((c) => (
               <option key={c.companyId} value={c.companyId}>
                 {c.name || c.companyId}
@@ -246,7 +200,7 @@ export function NewOrderPage() {
           {error && <Notice error>{error}</Notice>}
         </form>
       )}
-    </section>
+    </CompanyWorkspaceShell>
   );
 }
 
@@ -257,10 +211,13 @@ export function ManageOrderPage({ id }: { id: string }) {
     `/orders/${encodeURIComponent(id)}`,
     state.orders.find((o) => o.id === id),
   );
-  const applications = useResource<Application[]>(
-    `/orders/${encodeURIComponent(id)}/applications?limit=100`,
-    state.applications.filter((a) => a.orderId === id),
+  const applicationsResource = useWorkspaceCollection<CompanyApplicationRow>(
+    `/v1/orders/${encodeURIComponent(id)}/applications`,
   );
+  const applications = {
+    ...applicationsResource,
+    data: applicationsResource.data?.map(workspaceApplication),
+  };
   const [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
@@ -333,29 +290,27 @@ export function ManageOrderPage({ id }: { id: string }) {
   }
   if (!me.data)
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Управление заказом">
         <ResourceState error={me.error} reload={me.reload} />
-        {me.error && <LoginRequired />}
-      </section>
+      </CompanyWorkspaceShell>
     );
   if (!order)
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Управление заказом">
         <ResourceState error={orderResource.error} reload={orderResource.reload} />
-      </section>
+      </CompanyWorkspaceShell>
     );
   if (!canManage)
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Управление заказом">
         <NoMembership />
-      </section>
+      </CompanyWorkspaceShell>
     );
   return (
-    <section className="container page">
-      <PageHeading
-        title={order.title}
-        description={<Link href="/workspace/orders">← Мои заказы</Link>}
-      />
+    <CompanyWorkspaceShell title={order.title} fixedCompanyId={order.companyId}>
+      <Link className="text-link" href="/workspace/orders">
+        ← Мои заказы
+      </Link>
       <div className="stack-lg">
         <article className="card stack">
           <div>
@@ -365,7 +320,7 @@ export function ManageOrderPage({ id }: { id: string }) {
           </div>
           <p style={{ whiteSpace: 'pre-wrap' }}>{order.description}</p>
           <p>
-            {budgetLabel(order.budgetMin, order.budgetMax)} · До {dateLabel(order.deadline)}
+            {budgetLabel(order.budgetMin, order.budgetMax)} · {deadlineLabel(order.deadline)}
           </p>
           <div className="button-row">
             {order.status === 'draft' && (
@@ -426,7 +381,7 @@ export function ManageOrderPage({ id }: { id: string }) {
                   <span className="badge align-start">{applicationStatus[application.status]}</span>
                   <p style={{ whiteSpace: 'pre-wrap' }}>{application.letter}</p>
                   <p>
-                    {money(application.price)} · До {dateLabel(application.deadline)}
+                    {money(application.price)} · {deadlineLabel(application.deadline)}
                   </p>
                   {order.status === 'open' && application.status === 'pending' && (
                     <button
@@ -464,7 +419,7 @@ export function ManageOrderPage({ id }: { id: string }) {
           if (!busy) setSelected(null);
         }}
       />
-    </section>
+    </CompanyWorkspaceShell>
   );
 }
 
@@ -603,40 +558,41 @@ export function ApiDraftEditor({ id, preview = false }: { id: string; preview?: 
   }
   if (!me.data)
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Редактирование заказа">
         <ResourceState error={me.error} reload={me.reload} />
-        {me.error && <LoginRequired />}
-      </section>
+      </CompanyWorkspaceShell>
     );
   if (!order)
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Редактирование заказа">
         <ResourceState error={resource.error} reload={resource.reload} />
-      </section>
+      </CompanyWorkspaceShell>
     );
   if (!me.data.companies?.some((company) => company.companyId === order.companyId))
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Редактирование заказа">
         <NoMembership />
-      </section>
+      </CompanyWorkspaceShell>
     );
   if (order.status !== 'draft')
     return (
-      <section className="container page">
+      <CompanyWorkspaceShell title="Редактирование заказа" fixedCompanyId={order.companyId}>
         <EmptyState
           title="Черновик недоступен"
           description="Заказ уже опубликован или закрыт."
           href={`/workspace/orders/${encodeURIComponent(id)}`}
           label="Открыть заказ"
         />
-      </section>
+      </CompanyWorkspaceShell>
     );
   return (
-    <section className="container page">
-      <PageHeading
-        title={preview ? 'Предпросмотр заказа' : 'Редактирование заказа'}
-        description={<Link href={`/workspace/orders/${id}`}>← Управление заказом</Link>}
-      />
+    <CompanyWorkspaceShell
+      title={preview ? 'Предпросмотр заказа' : 'Редактирование заказа'}
+      fixedCompanyId={order.companyId}
+    >
+      <Link className="text-link" href={`/workspace/orders/${id}`}>
+        ← Управление заказом
+      </Link>
       <div className="stack-lg">
         {preview ? (
           <>
@@ -726,6 +682,6 @@ export function ApiDraftEditor({ id, preview = false }: { id: string; preview?: 
         )}
         {error && <Notice error>{error}</Notice>}
       </div>
-    </section>
+    </CompanyWorkspaceShell>
   );
 }

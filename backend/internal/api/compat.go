@@ -111,7 +111,7 @@ func (s *Server) compatibility(canonical http.Handler) http.Handler {
 			return
 		}
 		data = frontendValue(data)
-		if path == "/orders" || path == "/me/applications" || path == "/me/portfolio" || strings.HasSuffix(path, "/applications") || strings.HasSuffix(path, "/members") {
+		if path == "/categories" || path == "/orders" || path == "/me/applications" || path == "/me/portfolio" || strings.HasSuffix(path, "/applications") || strings.HasSuffix(path, "/members") {
 			if p, ok := data.(map[string]any); ok {
 				if items, exists := p["items"]; exists {
 					data = items
@@ -206,6 +206,9 @@ func frontendValue(v any) any {
 					m["status"] = "pending"
 				case "accepted":
 					m["status"] = "selected"
+					if x["order_status"] == "completed" {
+						m["status"] = "completed"
+					}
 				}
 			}
 		}

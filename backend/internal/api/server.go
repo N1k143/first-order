@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"ingeneriya/backend/internal/discovery"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -16,6 +18,8 @@ import (
 )
 
 type Config struct {
+	Environment     string
+	TrustedProxies  []netip.Prefix
 	Addr            string
 	DatabaseURL     string
 	SupabaseURL     string
@@ -31,11 +35,13 @@ type Config struct {
 	RateLimit       int
 }
 type Server struct {
-	DB         DB
-	Config     Config
-	logger     *slog.Logger
-	httpClient *http.Client
-	limiter    *rateLimiter
+	DB              DB
+	Config          Config
+	logger          *slog.Logger
+	httpClient      *http.Client
+	limiter         *rateLimiter
+	collectionFetch func(context.Context, int) ([]discovery.Candidate, error)
+	collectionCheck func(context.Context, discovery.Candidate) discovery.Candidate
 }
 
 func New(db DB, cfg Config) *Server {
@@ -52,6 +58,9 @@ func (s *Server) Handler() http.Handler {
 	s.registerCatalog(canonical)
 	s.registerOrders(canonical)
 	s.registerImports(canonical)
+	s.registerDiscovery(canonical)
+	s.registerCollection(canonical)
+	s.registerUserWorkflows(canonical)
 	canonical.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, problem(404, "NOT_FOUND", "Маршрут не найден"))
 	})
@@ -167,7 +176,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		}
 		if r.Method == http.MethodOptions {
 			rec.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-			rec.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			rec.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
 			rec.Header().Set("Access-Control-Max-Age", "600")
 			rec.WriteHeader(204)
 			return
@@ -182,10 +191,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				writeError(rec, r, problem(415, "UNSUPPORTED_MEDIA_TYPE", "Ожидается application/json"))
 				return
 			}
-			host, _, _ := net.SplitHostPort(r.RemoteAddr)
-			if host == "" {
-				host = r.RemoteAddr
-			}
+			host := s.clientIP(r)
 			if !s.limiter.allow(host, time.Now()) {
 				rec.Header().Set("Retry-After", "60")
 				writeError(rec, r, problem(429, "RATE_LIMITED", "Слишком много запросов. Попробуйте через минуту"))
@@ -196,6 +202,46 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		defer cancel()
 		next.ServeHTTP(rec, r.WithContext(ctx))
 	})
+}
+
+// Forwarded addresses are trusted only from explicitly configured proxies.
+func (s *Server) clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	peer = peer.Unmap()
+	trusted := func(ip netip.Addr) bool {
+		for _, prefix := range s.Config.TrustedProxies {
+			if prefix.Contains(ip) {
+				return true
+			}
+		}
+		return false
+	}
+	if !trusted(peer) {
+		return peer.String()
+	}
+	chain := r.Header.Get("X-Forwarded-For")
+	if len(chain) > 2048 {
+		return peer.String()
+	}
+	parts := strings.Split(chain, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip, e := netip.ParseAddr(strings.TrimSpace(parts[i]))
+		if e != nil {
+			return peer.String()
+		}
+		ip = ip.Unmap()
+		if !trusted(ip) {
+			return ip.String()
+		}
+	}
+	return peer.String()
 }
 
 type rateEntry struct {
