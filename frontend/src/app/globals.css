@@ -373,6 +373,9 @@ hr {
 }
 .tabs a,
 .tabs button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   white-space: nowrap;
   background: none;
   border: 0;

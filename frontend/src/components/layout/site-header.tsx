@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { DEMO, refreshAppState, updateDemo, useAppState, useSessionError } from '@/lib/state/store';
 import styles from './site-shell.module.css';
@@ -16,6 +16,7 @@ export function SiteHeader() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const mobileMenu = useRef<HTMLDetailsElement>(null);
   const company = state.profile.role === 'company' || Boolean(state.profile.companies?.length);
   const moderator = state.profile.role === 'moderator';
   const accountPage =
@@ -98,11 +99,17 @@ export function SiteHeader() {
               </button>
             </>
           )}
-          <details key={path} className={styles.menu}>
+          <details key={path} ref={mobileMenu} className={styles.menu}>
             <summary>Меню</summary>
             <nav className={styles.mobileNav} aria-label="Мобильная навигация">
               <Link href="/companies">Компании</Link>
               <Link href="/orders">Заказы</Link>
+              <Link
+                href="/#how-it-works"
+                onClick={() => mobileMenu.current?.removeAttribute('open')}
+              >
+                Как это работает
+              </Link>
               {!sessionError && (
                 <Link href={state.signedIn ? dashboard : '/login'}>
                   {state.signedIn ? 'Мой кабинет' : 'Войти'}
