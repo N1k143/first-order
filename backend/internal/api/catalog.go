@@ -235,7 +235,7 @@ func (s *Server) catalogDeleteCategory(w http.ResponseWriter, r *http.Request) e
 
 func catalogCompanyOrder(value string) (string, error) {
 	switch value {
-	case "", "updated":
+	case "", "updated", "relevance":
 		return "c.website_checked_at DESC NULLS LAST,c.updated_at DESC,c.id", nil
 	case "name", "name_asc":
 		return "c.name ASC,c.id", nil
@@ -280,12 +280,16 @@ func (s *Server) catalogListCompanies(w http.ResponseWriter, r *http.Request) er
 		}
 		add("c.visibility", visibility)
 	}
-	if q := strings.TrimSpace(query.Get("q")); q != "" {
-		if utf8.RuneCountInString(q) > 240 {
-			return invalid("q", "Слишком длинный поисковый запрос")
+	search := strings.TrimSpace(query.Get("q"))
+	if search != "" {
+		clause, rank, err := catalogSearchSQL(search, &args)
+		if err != nil {
+			return err
 		}
-		args = append(args, q)
-		clauses = append(clauses, fmt.Sprintf("concat_ws(' ',c.name,c.address,c.phone,c.email) ILIKE '%%' || $%d || '%%'", len(args)))
+		clauses = append(clauses, clause)
+		if query.Get("sort") == "" || query.Get("sort") == "relevance" {
+			order = rank + order
+		}
 	}
 	if id := query.Get("category_id"); id != "" {
 		if !validUUID(id) {
@@ -301,7 +305,11 @@ func (s *Server) catalogListCompanies(w http.ResponseWriter, r *http.Request) er
 		clauses = append(clauses, fmt.Sprintf("EXISTS (SELECT 1 FROM catalog.categories category_filter WHERE category_filter.id=c.category_id AND category_filter.name=$%d)", len(args)))
 	}
 	if city := strings.TrimSpace(query.Get("city")); city != "" {
-		add("c.city", city)
+		if utf8.RuneCountInString(city) > 240 {
+			return invalid("city", "Не более 240 символов")
+		}
+		args = append(args, city)
+		clauses = append(clauses, fmt.Sprintf("catalog.search_normalize(c.city)=catalog.search_normalize($%d)", len(args)))
 	}
 	if status := query.Get("website_status"); status != "" {
 		if !oneOf(status, "not_found", "found", "needs_review") {
@@ -314,13 +322,29 @@ func (s *Server) catalogListCompanies(w http.ResponseWriter, r *http.Request) er
 		where = strings.Join(clauses, " AND ")
 	}
 	var total int64
-	if err = s.DB.QueryRow(r.Context(), "SELECT count(*) FROM catalog.companies c WHERE "+where, args...).Scan(&total); err != nil {
+	tx, err := s.DB.Begin(r.Context())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`); err != nil {
+		return err
+	}
+	if search != "" {
+		if _, err = tx.Exec(r.Context(), `SET LOCAL pg_trgm.word_similarity_threshold=0.4`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE "+where, args...).Scan(&total); err != nil {
 		return err
 	}
 	args = append(args, p.Limit, p.Offset)
 	sql := fmt.Sprintf(`SELECT c.*,cat.name AS category_name,`+catalogSourcesSQL+` FROM catalog.companies c LEFT JOIN catalog.categories cat ON cat.id=c.category_id WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d`, where, order, len(args)-1, len(args))
-	items, err := listJSON(r.Context(), s.DB, sql, args...)
+	items, err := listJSON(r.Context(), tx, sql, args...)
 	if err != nil {
+		return err
+	}
+	if err = tx.Commit(r.Context()); err != nil {
 		return err
 	}
 	decorateCatalogCompanies(w, items)

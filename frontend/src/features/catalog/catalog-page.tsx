@@ -1,19 +1,25 @@
 'use client';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { useRef } from 'react';
+import { useOptimistic, useRef, useTransition } from 'react';
 import { companies } from '@/data/demo';
 import { useCategories } from '@/lib/api/categories';
 import { useResource } from '@/lib/api/resources';
 import { useAppState } from '@/lib/state/store';
 import { CompanyCard, statusLabels } from './company-card';
 import { filterCompanies } from './filter';
+import { catalogParams } from './params';
 import { EmptyState, PageHeading, ResourceState } from '@/components/ui/primitives';
 import styles from './catalog.module.css';
 export function CatalogPage() {
-  const params = useSearchParams(),
+  const urlParams = useSearchParams(),
     router = useRouter(),
     pathname = usePathname(),
     dialog = useRef<HTMLDialogElement>(null);
+  const [queryString, setQueryString] = useOptimistic(
+    catalogParams(urlParams.toString()).toString(),
+  );
+  const [pending, startTransition] = useTransition();
+  const params = new URLSearchParams(queryString);
   const state = useAppState();
   const directory = useCategories();
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1),
@@ -37,30 +43,37 @@ export function CatalogPage() {
     const p = new URLSearchParams(params.toString());
     p.delete('page');
     for (const [k, v] of Object.entries(values)) p.set(k, v);
-    router.replace(pathname + '?' + p.toString(), { scroll: false });
+    navigate(p);
   }
+  function navigate(p: URLSearchParams) {
+    startTransition(() => {
+      setQueryString(p.toString());
+      router.replace(pathname + '?' + p.toString(), { scroll: false });
+    });
+  }
+  const sortOptions = (
+    <>
+      {params.get('q')?.trim() && <option value="relevance">По совпадению с запросом</option>}
+      <option value="updated">Сначала недавно проверенные</option>
+      <option value="name">По названию</option>
+    </>
+  );
+  const sort = params.get('sort') || (params.get('q')?.trim() ? 'relevance' : 'updated');
   const filters = (
     <div className={`card ${styles.filters}`}>
       <h3>Фильтры</h3>
-      <label className="form-field mobile-only">
-        <span>Город</span>
-        <select
-          className="field"
-          aria-label="Город в фильтрах"
-          value={params.get('city') ?? 'Астана'}
-          onChange={(event) => change({ city: event.target.value })}
-        >
-          <option value="">Все города</option>
-          <option>Астана</option>
-          <option>Алматы</option>
-        </select>
-      </label>
       <p className="small">Сфера бизнеса</p>
       {!directory.data && <ResourceState error={directory.error} reload={directory.reload} />}
       {[{ id: '', name: 'Все сферы' }, ...(directory.data || [])].map((c) => (
         <button
           key={c.id}
-          aria-pressed={(params.get('category_id') || '') === c.id}
+          aria-pressed={
+            params.get('category_id')
+              ? params.get('category_id') === c.id
+              : params.get('category')
+                ? params.get('category') === c.name
+                : c.id === ''
+          }
           onClick={() => change({ category_id: c.id, category: '' })}
         >
           {c.name}
@@ -82,7 +95,7 @@ export function CatalogPage() {
         </button>
       ))}
       <hr />
-      <button onClick={() => router.replace('/companies?city=&status=', { scroll: false })}>
+      <button onClick={() => navigate(new URLSearchParams('city=&status='))}>
         Сбросить фильтры
       </button>
     </div>
@@ -135,7 +148,7 @@ export function CatalogPage() {
       </form>
       <div className={styles.layout}>
         <aside className={styles.sidebar}>{filters}</aside>
-        <div className={styles.results}>
+        <div className={styles.results} aria-busy={pending || data.loading}>
           {data.data ? (
             <>
               <div className="spread">
@@ -143,11 +156,10 @@ export function CatalogPage() {
                 <select
                   className={styles.sort}
                   aria-label="Сортировка"
-                  value={params.get('sort') || 'updated'}
+                  value={sort}
                   onChange={(e) => change({ sort: e.target.value })}
                 >
-                  <option value="updated">Сначала недавно проверенные</option>
-                  <option value="name">По названию</option>
+                  {sortOptions}
                 </select>
               </div>
               {data.data.items.length ? (
@@ -212,6 +224,16 @@ export function CatalogPage() {
               <option value="">Все города</option>
               <option>Астана</option>
               <option>Алматы</option>
+            </select>
+          </label>
+          <label className="form-field">
+            Сортировка
+            <select
+              className="field"
+              value={sort}
+              onChange={(event) => change({ sort: event.target.value })}
+            >
+              {sortOptions}
             </select>
           </label>
           {filters}
