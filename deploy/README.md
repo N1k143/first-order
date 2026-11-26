@@ -1,108 +1,95 @@
-# Рабочее окружение «Первого заказа»
+# Эксплуатация «Первого заказа»
 
-Адрес приложения: https://e1.iq-home.kz. Supabase проекта: https://e2.iq-home.kz.
+Сайт — https://e1.iq-home.kz, Supabase — https://e2.iq-home.kz. Рабочая копия: `/data/services/ingeneriya`.
 
-## Развёртывание 19 ноября 2026
+## Текущая схема
 
-- Сделана закрытая резервная копия PostgreSQL, ролей, предыдущего backend и конфигурации. Путь сохранён в `.deploy/latest-backup`; каталог исключён из Git.
-- Миграции `001_initial.sql` и `002_runtime_integrity.sql` применены под `supabase_admin`. Журнал: `public.firstorder_schema_migrations`.
-- Создана отдельная runtime-роль `firstorder_backend`; подключение через Supavisor с именем `firstorder_backend.ingeneriya`. Пароль находится только в закрытом `backend/.env`.
-- PM2 `ingeneriya-catalog` запускает полный Go API на `127.0.0.1:18082`; `ingeneriya-frontend` запускает production Next.js на `127.0.0.1:18080`. Конфигурация PM2 сохранена.
-- Существующий Nginx уже направляет `e1.iq-home.kz` на порт 18080. Его конфигурация не изменялась: запросы health/ready/API проксируются frontend в Go API.
-- `frontend/.env.local` включает `NEXT_PUBLIC_DATA_MODE=api` и `BACKEND_URL=http://127.0.0.1:18082`. Этот режим включён в опубликованную сборку.
-- Supabase `SITE_URL` и разрешённый callback настроены на `https://e1.iq-home.kz` и `/auth/callback`. Подтверждение email осталось обязательным.
+Nginx направляет сайт на Next.js `127.0.0.1:18080`; API проксируется в Go `127.0.0.1:18082`. PM2: `ingeneriya-frontend` и `ingeneriya-catalog`. API запускается через `deploy/run-api.sh`, который читает закрытый `backend/.env`. PM2 автоматически запускается при загрузке сервера. Подтверждение email Supabase обязательно, SMTP Gmail настроен отдельно от Git.
 
-## Проверено на рабочей базе
+Фронтенд выпускается его разработчиком. Серверные обновления собираются отдельно, затем атомарно заменяют `backend/bin/api`; перестраивать `.next` работающего сайта нельзя. Нынешние migration SQL — `001`–`008`; текущие контракты — в `backend/docs/`.
 
-API и настоящий браузер прошли: вход компании → создание черновика → публикация → вход разработчика → отклик → подтверждение выбора → отображение принятого отклика. Проверены refresh с ротацией токена, HttpOnly/Secure/SameSite cookies, выход и отказ без сессии.
+## Production-настройки
 
-В первом прогоне два помеченных аккаунта были созданы через административную генерацию signup-ссылок без отправки почты. Этот прогон проверил бизнес-сценарий, но не публичную регистрацию и доставку письма. После него удалены только эти два аккаунта, одна тестовая компания, два заказа и два отклика. Закрытые отчёты без паролей и токенов сохранены в `.deploy/`.
+В закрытом `backend/.env`:
 
-SMTP Gmail подключён с паролем приложения: проверены STARTTLS и аутентификация, пересоздан только контейнер Auth. Закрытые настройки находятся в `supabase/.env` и `supabase/.smtp.local.env`, вне Git. В финальной проверке два новых тестовых аккаунта зарегистрированы через публичную форму браузера (`201`), оба письма получены и оба адреса подтверждены настоящими ссылками. Повторная отправка подтверждения компании также проверена. Подтверждение email оставалось обязательным; административное подтверждение в этом прогоне не применялось.
+- `APP_ENV=production`, `COOKIE_SECURE=true`.
+- `ALLOWED_ORIGINS` — только точные HTTPS origins сайта; localhost для рабочего API не допускается.
+- `AUTH_REDIRECT_URL=https://e1.iq-home.kz/auth/callback`.
+- HTTPS `SUPABASE_URL`, публичный `SUPABASE_ANON_KEY`, отдельный `READY_TOKEN` длиной не менее 32 символов.
+- `TRUSTED_PROXY_CIDRS` содержит loopback `127.0.0.1/32,::1/128` для Nginx/Next.js и официальные сети Cloudflare, через который работает сайт. Сети сверяются с [IPv4](https://www.cloudflare.com/ips-v4) и [IPv6](https://www.cloudflare.com/ips-v6) при выпуске. Не добавлять недоверенные сети или `0.0.0.0/0`: это влияет на защиту от подмены IP и ограничение запросов. Разбирается цепочка справа до первого недоверенного адреса; произвольное левое значение не используется.
+- Runtime `DATABASE_URL` остаётся у отдельной роли `firstorder_backend`; административные реквизиты не передаются API.
 
-После подтверждения обоих адресов production Playwright успешно завершил сценарий за 12,1 с: вход компании → создание черновика → публикация → отклик разработчика → выбор исполнителя → отображение принятого отклика. Закрытые доказательства сохранены в `.deploy/final-email-e2e-report.json` и `.deploy/full-flow-foe2email-20261119-122416.json`.
+`.env`, резервные копии и отчёты имеют закрытые права и исключены из Git. Токены, пароли и DSN не передаются через командную строку и журналы.
 
-Очистка финального прогона завершена по точным UUID и метке с проверкой зависимостей: удалены 2 аккаунта Auth, 2 профиля, 1 компания, 1 membership, 1 заказ и 1 отклик. Повторная проверка показала 0 оставшихся тестовых записей. Отчёт сохранён в `.deploy/email-e2e-cleanup.json`; тестовые пароли удалены. После очистки `/health`, `/ready` с bearer-токеном и `/api/v1/companies` вернули `200`.
+## Автоматические проверки изменений
 
-## Обновление профиля, настроек и кабинета компании
+`.github/workflows/backend.yml` проверяет main/PR без секретов рабочего сервиса: отдельная PostgreSQL 17 с минимальной Auth-схемой, применение и повтор миграций, race-тесты, vet, сборка API и проверки инструментов эксплуатации. Версии Actions закреплены по commit SHA. Выкладка из CI не выполняется.
 
-Этот раздел описывает подготовленную процедуру; сам по себе он не подтверждает её выполнение на рабочем сайте. Сначала завершите проверки и опубликуйте проверенный commit в `main`. Рабочая копия сборки и `/data/services/ingeneriya` должны содержать этот commit. Скрипты PM2 запускают API через `deploy/run-api.sh` (он читает закрытый `backend/.env`) и Next.js из рабочего `frontend/.next`; отдельного контейнера приложения в текущей схеме нет.
+## Миграции
 
-Готовьте сборки в отдельной копии: сборка поверх `.next` работающего frontend может нарушить выдачу страниц и ресурсов. Команды ниже рассчитаны на одну shell-сессию и существующие процессы PM2.
+Из `backend/` запускайте `go run ./cmd/migrate` с административным `DATABASE_URL` в закрытом окружении. Не изменяйте runtime DSN в `.env` ради миграции.
 
-```sh
-set -euo pipefail
-umask 077
-release_source=/home/server/.codex/worktrees/merge-main/ingeneriya
-live_root=/data/services/ingeneriya
-release_stamp=$(date -u +%Y%m%d-%H%M%S)
-release_stage="$live_root/.deploy/sections-$release_stamp"
-release_backup="$live_root/.deploy/backup-sections-$release_stamp"
-git -C "$live_root" pull --ff-only origin main
-test "$(git -C "$release_source" rev-parse HEAD)" = "$(git -C "$live_root" rev-parse HEAD)"
-mkdir -p "$release_stage" "$release_backup"
-(
-  cd "$release_source/backend"
-  GOCACHE=/tmp/firstorder-go-cache /data/go/bin/go build -trimpath -o "$release_stage/api" ./cmd/api
-)
-(
-  cd "$release_source/frontend"
-  npm ci
-  NEXT_PUBLIC_DATA_MODE=api BACKEND_URL=http://127.0.0.1:18082 npm run build
-)
-cp -a "$release_source/frontend/.next" "$release_stage/next"
-cp -an "$live_root/frontend/.next/static/." "$release_stage/next/static/"
-cp -p "$live_root/backend/bin/api" "$release_backup/api.before"
-docker exec ingeneriya-supabase-db pg_dump -U supabase_admin -d postgres -Fc > "$release_backup/postgres.dump"
-test -s "$release_backup/postgres.dump"
-docker exec -i ingeneriya-supabase-db pg_restore --list < "$release_backup/postgres.dump" > "$release_backup/dump-contents.txt"
-```
+Мигратор удерживает общий advisory lock. Внешние BEGIN/COMMIT файла передаются под управление мигратора: SQL и запись журнала сохраняются одной транзакцией. Успешный повтор ничего не применяет. Для новых и уже учтённых файлов записывается SHA-256; последующее изменение SQL останавливает миграцию. Старый журнал без checksum получает однократный baseline текущих файлов — это не доказательство содержания исторически применённого SQL. Исправления выпускаются новой миграцией.
 
-Миграция `003_profile_avatar.sql` добавляет только nullable `profiles.profiles.avatar_url text`. Если столбец уже существует, данные не меняются. Ниже её SQL и запись журнала выполняются в одной транзакции с тем же advisory lock, что использует мигратор. Проверяются ранее применённые `001`/`002`; пароли и административный DSN не передаются в командную строку.
+Перед обновлением обязательна свежая копия базы. Для отката приложения сохраняется предыдущий бинарный файл. Базу автоматически из backup не восстанавливать: сначала согласовать потерю записей после снимка и отдельное окно восстановления. Добавленные совместимые таблицы при откате приложения сохраняются.
+
+## Резервные копии
+
+Из корня рабочей копии:
 
 ```sh
-docker exec -i ingeneriya-supabase-db psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-BEGIN;
-SET LOCAL lock_timeout = '5s';
-SET LOCAL statement_timeout = '30s';
-SELECT pg_advisory_xact_lock(1730191919);
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.firstorder_schema_migrations WHERE name='001_initial.sql')
-     OR NOT EXISTS (SELECT 1 FROM public.firstorder_schema_migrations WHERE name='002_runtime_integrity.sql') THEN
-    RAISE EXCEPTION 'Apply and verify migrations 001 and 002 first';
-  END IF;
-END $$;
-ALTER TABLE profiles.profiles ADD COLUMN IF NOT EXISTS avatar_url text;
-INSERT INTO public.firstorder_schema_migrations(name)
-VALUES ('003_profile_avatar.sql') ON CONFLICT (name) DO NOTHING;
-COMMIT;
-SELECT name FROM public.firstorder_schema_migrations ORDER BY name;
-SELECT column_name,data_type,is_nullable FROM information_schema.columns
-WHERE table_schema='profiles' AND table_name='profiles' AND column_name='avatar_url';
-SQL
+python3 deploy/ops.py backup
+python3 deploy/ops.py restore-check
 ```
 
-Обычный `backend/cmd/migrate` также поддерживает `003`: он использует административный `DATABASE_URL`, сортирует SQL-файлы и пропускает имена из журнала. Его SQL и запись журнала коммитятся отдельно, поэтому повтор после сбоя между ними должен оставаться идемпотентным; `003` этому условию соответствует. Не меняйте runtime DSN ради миграции.
+Первый вызов создаёт `.backups/backup-.../`: полный `postgres.dump`, роли `globals.sql`, перечень ролей, архив локальных настроек и manifest с SHA-256. Записи всех прикладных таблиц и `auth.users` считаются в том же экспортированном repeatable-read снимке, который использует pg_dump. Контрольные суммы и читаемость архива проверяются до статуса complete. Команды не выгружают содержимое в Git или внешние сервисы.
 
-После успешной миграции переключите готовую сборку. На этом шаге frontend кратковременно недоступен; в процессе сборки он продолжал работать.
+`restore-check` проверяет checksum, запускает **новый контейнер без сети** на том же образе PostgreSQL, восстанавливает схему/данные без production ownership/ACL и сравнивает все счётчики снимка. После проверки удаляется только созданный контейнер. Рабочая база никогда не является целью pg_restore. Наличие globals/config в архиве не означает, что полное восстановление прав, SMTP, доменов и всех сервисов уже отрепетировано.
+
+Расписание — пользовательские systemd units из `deploy/systemd/`; для `server` включён linger, поэтому они работают после выхода пользователя:
+
+- `firstorder-backup.timer`: ежедневно около 02:15 UTC, случайная задержка до 10 минут.
+- `firstorder-restore.timer`: по воскресеньям около 03:00 UTC.
+- `firstorder-check.timer`: каждые 5 минут.
 
 ```sh
-pm2 stop ingeneriya-frontend
-(
-  cd "$live_root/frontend"
-  npm ci
-)
-mv "$live_root/frontend/.next" "$release_backup/frontend.next.before"
-mv "$release_stage/next" "$live_root/frontend/.next"
-cp "$release_stage/api" "$live_root/backend/bin/api.next"
-mv "$live_root/backend/bin/api.next" "$live_root/backend/bin/api"
-pm2 restart ingeneriya-catalog
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 http://127.0.0.1:18082/health
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 'http://127.0.0.1:18082/api/v1/companies?limit=1' > /dev/null
-pm2 restart ingeneriya-frontend
-pm2 save
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 https://e1.iq-home.kz/health
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 https://e1.iq-home.kz/api/categories > /dev/null
+systemctl --user list-timers 'firstorder-*'
+systemctl --user start firstorder-backup.service
+systemctl --user start firstorder-restore.service
+journalctl --user -u firstorder-backup.service -u firstorder-restore.service --since today
 ```
 
-При ошибке переключения остановите frontend, восстановите `api.before` и `frontend.next.before`, верните зависимости соответствующего commit и перезапустите процессы. Добавленный nullable-столбец совместим с предыдущим backend; удалять его при откате приложения не нужно. Рабочую БД из backup автоматически не восстанавливайте. Проверка новых разделов до публикации использует отдельную PostgreSQL и контролируемые Auth/API-ответы; реальные смены email/пароля и отправка писем не являются частью этих команд.
+Хранятся последние 14 полных копий; более старые удаляются только после 14 суток. Последняя копия с успешным восстановлением сохраняется до появления более новой проверенной. Посторонние каталоги и незавершённые копии автоматически не удаляются. Целевой интервал возможной потери данных при исправном ежедневном расписании — до суток. Полное время восстановления сервиса пока не измерялось.
+
+**Все копии сейчас находятся на том же сервере.** Потеря диска/сервера требует отдельной внешней копии; её место и доступ выбирает владелец проекта. В копиях есть Auth и секретные настройки, поэтому нельзя отправлять их в общедоступную папку.
+
+## Мониторинг
+
+```sh
+python3 deploy/ops.py check
+cat .ops/status.json
+journalctl --user -u firstorder-check.service --since today
+```
+
+Проверяются сайт, каталог, Auth, защищённая готовность базы, TLS и срок сертификата, PM2 и pm2-logrotate, свободное место, свежесть backup (30 часов), проверка восстановления (8 суток) и зависшие задания сбора. Ошибки сбора за последние сутки отражаются отдельным предупреждением. Результат JSON сохраняется в закрытом `.ops/status.json`; при ошибке команда возвращает ненулевой код и systemd отмечает сбой. Внешняя доставка аварийных уведомлений требует выбранного владельцем канала и отдельно настраивается.
+
+Ротация журналов уже выполняется pm2-logrotate: 10 MB, 14 архивов, сжатие и ежедневная ротация. Второй механизм для тех же файлов не запускается. Не включайте пароли/токены/полные тела Auth-ответов в логи.
+
+## Порядок выпуска бэкенда
+
+1. Проверки CI/локальные интеграционные тесты должны пройти; source и origin/main должны совпадать.
+2. Выполнить backup, убедиться в его complete/checksum; сохранить предыдущий API и закрытый manifest выпуска в `.deploy/`.
+3. Применить миграции новым мигратором под административной ролью.
+4. Обновить чистую рабочую копию fast-forward, заменить заранее собранный бинарный API через `.next`/rename и перезапустить только `ingeneriya-catalog`.
+5. Проверить health, protected ready, каталог и запрет доступа к приватным API без пользовательской сессии; выполнить `ops.py check`. Фронтенд не перестраивать для backend-only выпуска.
+6. При ошибке вернуть предыдущий бинарный файл и совместимые настройки, перезапустить API, сохранить закрытый отчёт. Не откатывать данные автоматически.
+
+## Перед публичным запуском
+
+- Подключить внешнее хранилище backup и канал аварийных сообщений.
+- Разработчику фронтенда подключить новые кабинеты/уведомления и показать атрибуцию OSM; при выборе исполнителя пояснить передачу контактных email сторонам.
+- Владельцу утвердить настоящие условия использования, политику конфиденциальности и адрес поддержки: сейчас информационные страницы описывают демонстрацию.
+- Назначить реального модератора после входа владельца; фиктивные аккаунты и автоматическое повышение роли не создаются.
+- Проверить доступность источника OSM перед массовым наполнением. Публичный Overpass используется только для ограниченных ручных порций, не для постоянного массового импорта.
+
+Публичная регистрация с настоящими Gmail-письмами и путь до выбора ранее проверены на рабочем сайте; тестовые записи удалены по согласованию. Новые ветви до завершения/отмены, уведомления и контакты проверяются на отдельной базе, без создания новых production-аккаунтов. Точные доказательства текущего выпуска и восстановления сохраняются в закрытых `.deploy/`, `.backups/` и `.ops/`.

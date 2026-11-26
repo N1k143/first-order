@@ -18,3 +18,7 @@ __pycache__/
 # Local discovery exports and raw source snapshots.
 /astana-source*.json
 /astana-candidates*.json
+
+# Private scheduled operations and database backups.
+/.backups/
+/.ops/

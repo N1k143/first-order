@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -17,6 +18,8 @@ import (
 )
 
 type Config struct {
+	Environment     string
+	TrustedProxies  []netip.Prefix
 	Addr            string
 	DatabaseURL     string
 	SupabaseURL     string
@@ -188,10 +191,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				writeError(rec, r, problem(415, "UNSUPPORTED_MEDIA_TYPE", "Ожидается application/json"))
 				return
 			}
-			host, _, _ := net.SplitHostPort(r.RemoteAddr)
-			if host == "" {
-				host = r.RemoteAddr
-			}
+			host := s.clientIP(r)
 			if !s.limiter.allow(host, time.Now()) {
 				rec.Header().Set("Retry-After", "60")
 				writeError(rec, r, problem(429, "RATE_LIMITED", "Слишком много запросов. Попробуйте через минуту"))
@@ -202,6 +202,46 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		defer cancel()
 		next.ServeHTTP(rec, r.WithContext(ctx))
 	})
+}
+
+// Forwarded addresses are trusted only from explicitly configured proxies.
+func (s *Server) clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	peer = peer.Unmap()
+	trusted := func(ip netip.Addr) bool {
+		for _, prefix := range s.Config.TrustedProxies {
+			if prefix.Contains(ip) {
+				return true
+			}
+		}
+		return false
+	}
+	if !trusted(peer) {
+		return peer.String()
+	}
+	chain := r.Header.Get("X-Forwarded-For")
+	if len(chain) > 2048 {
+		return peer.String()
+	}
+	parts := strings.Split(chain, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip, e := netip.ParseAddr(strings.TrimSpace(parts[i]))
+		if e != nil {
+			return peer.String()
+		}
+		ip = ip.Unmap()
+		if !trusted(ip) {
+			return ip.String()
+		}
+	}
+	return peer.String()
 }
 
 type rateEntry struct {

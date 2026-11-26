@@ -1,0 +1,13 @@
+[Unit]
+Description=FirstOrder Database and configuration backup
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/data/services/ingeneriya
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /data/services/ingeneriya/deploy/ops.py backup
+UMask=0077
+NoNewPrivileges=true
+TimeoutStartSec=15min
