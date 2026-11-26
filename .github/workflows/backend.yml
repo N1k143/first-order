@@ -62,4 +62,5 @@ jobs:
       - name: Check operational tools
         run: |
           python3 -m unittest discover -s deploy -p 'test_*.py'
+          python3 -m unittest discover -s backend/tools -p 'test_dgis*.py'
           python3 -m py_compile deploy/ops.py
